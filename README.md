@@ -18,17 +18,18 @@ WEB-api
 #### Информация о сессии
 `http://server.name/sessions/some_sesion_id`
 
+#### Сообщения сессии
+`http://server.name/sessions/some_sesion_id/messages`
+
+#### Отправка сообщения
+`http://server.name/sessions/some_sesion_id/messages?jid=some_contact_id&message=some_message_text`
+
 #### Список контактов
 `http://server.name/sessions/some_sesion_id/contacts`
 
 #### Информация о контакте
-`http://server.name/sessions/some_sesion_id/contacts/contact_id`
+`http://server.name/sessions/some_sesion_id/contacts/some_contact_id`
 
-#### Список сообщений
-`http://server.name/sessions/some_sesion_id/contacts/contact_id/messages`
-
-#### Отправка сообщения
-`http://server.name/sessions/some_sesion_id/contacts/contact_id/messages?message=some_message_text`
 
 Установка
 =========

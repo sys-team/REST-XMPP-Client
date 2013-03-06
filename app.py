@@ -101,9 +101,9 @@ def contact_messages(session_id=None,jid=None):
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
         
-    if message is None:
-        response['messages'] = session.messages(jid)
-        return json.dumps(response)
+#    if message is None:
+#        response['messages'] = session.messages(jid)
+#        return json.dumps(response)
             
     try:
         session.send(jid,message)
@@ -113,6 +113,40 @@ def contact_messages(session_id=None,jid=None):
         
     response['message'] = message
         
+    return json.dumps(response)
+
+@app.route('/sessions/<session_id>/messages')
+def session_messages(session_id=None):
+    message = request.query.get('message',None)
+    jid = request.query.get('jid',None)
+    response = {}
+
+    if session_id is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
+        abort(400, json.dumps(response))
+
+    try:
+        session = session_pool.session_for_id(session_id)
+    except KeyError:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        abort(404, json.dumps(response))
+
+    if  message is None and jid is None:
+        response['messages'] = session.all_messages()
+        return json.dumps(response)
+
+    if message is None or jid is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
+        abort(400, json.dumps(response))
+
+    response['message'] = {'jid':jid,'text':message}
+
+    try:
+        response['message']['id'] = session.send(jid,message)
+    except XMPPSendError:
+        response['error'] = {'code':'XMPPSendError','text':template('Message sending failed')}
+        abort(404, json.dumps(response))
+
     return json.dumps(response)
     
 

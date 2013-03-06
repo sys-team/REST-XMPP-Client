@@ -1,6 +1,17 @@
 import xmpp
 import os
 import logging
+import threading
+
+class XMPPProcessThread(threading.Thread):
+    """Threaded XMPP process"""
+    def __init__(self, client):
+        threading.Thread.__init__(self)
+        self.client = client
+
+    def run(self):
+        while True:
+            self.client.Process(1)
 
 class XMPPConnectionError(Exception):
     def __init__(self, server):
@@ -26,6 +37,8 @@ class XMPPConnection():
         self.server = server
         self.client = xmpp.Client(self.jid.getDomain(),debug = [])
         self.messages_store = {}
+        self.process_thread = XMPPProcessThread(self.client)
+        self.client.RegisterDisconnectHandler(self.setup_connection())
         
     def server_tuple(self):
         server_port = self.server.split(':')
@@ -39,22 +52,21 @@ class XMPPConnection():
         
     def register_handlers(self):
         self.client.Dispatcher.RegisterHandler('message',self.xmpp_message)
-        self.client.Dispatcher.RegisterDefaultHandler(self.dummy_handler)
+        self.client.Dispatcher.RegisterDefaultHandler(self.debugging_handler)
         
-    def dummy_handler(self, con, event):
+    def debugging_handler(self, con, event):
         print 'event',event
 
     def xmpp_message(self, con, event):
         type = event.getType()
         jid_from = event.getFrom().getStripped()
-        
-        print 'message'
+
         if jid_from not in self.messages_store:
             self.messages_store[jid_from] = []
         
         message_text = event.getBody()
         if  message_text is not None:
-            self.messages_store[jid_from].append(message_text)  
+            self.messages_store[jid_from].append({'id':event.getID(),'text':message_text})
         
     def setup_connection(self):         
         if not self.client.isConnected():
@@ -68,6 +80,7 @@ class XMPPConnection():
             
             self.register_handlers()
             self.client.sendInitPresence()
+            self.process_thread.start()
             
     def send(self,to_jid,message):
         self.setup_connection()
@@ -75,12 +88,12 @@ class XMPPConnection():
             id = self.client.send(xmpp.protocol.Message(to_jid,message))
             if not id:
                 raise XMPPSendError()
+            return id
         else:
             raise XMPPSendError()
             
     def contacts(self):
         if self.client.isConnected():
-            self.client.Process(0)
             roster = self.client.getRoster()
             items = roster.getItems()
             agg_roster = {}
@@ -95,7 +108,6 @@ class XMPPConnection():
             raise XMPPRosterError()
             
     def contact(self,jid):
-        self.client.Process(0)
         self.client.getRoster().getRoster()
         if self.client.isConnected():
             return self.client.getRoster().getItem(jid)
@@ -103,11 +115,13 @@ class XMPPConnection():
             raise XMPPRosterError()
             
     def messages(self,jid):
-        self.client.Process(0)
         try: 
             return self.messages_store[jid]
         except KeyError:
             return []
+
+    def all_messages(self):
+        return self.messages_store
         
 
 class XMPPSessionPool():
