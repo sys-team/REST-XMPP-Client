@@ -1,36 +1,32 @@
 # -*- coding: utf-8 -*-
 
+__author__ = 'kovtash'
+
 import xmpp
 import os
 import logging
 import threading
+import inspect
+import socket
 
-class XMPPProcessThread(threading.Thread):
-    """Threaded XMPP process"""
-    def __init__(self, client):
-        threading.Thread.__init__(self)
-        self.client = client
-
-    def run(self):
-        while True:
-            self.client.Process(1)
+from bottle import PluginError
 
 class XMPPConnectionError(Exception):
     def __init__(self, server):
         self.server = server
     def __str__(self):
         return repr(self.server)
-    
+
 class XMPPAuthError(Exception):
     pass
 
 class XMPPSendError(Exception):
     pass
-    
+
 class XMPPRosterError(Exception):
     pass
 
-class XMPPConnection():
+class XMPPSession():
     def __init__(self,jid,password,server=None):
         self.jid = xmpp.protocol.JID(jid)
         if  server is None:
@@ -39,14 +35,21 @@ class XMPPConnection():
         self.server = server
         self.client = xmpp.Client(self.jid.getDomain(),debug = [])
         self.messages_store = {}
-        self.process_thread = XMPPProcessThread(self.client)
-        self.client.RegisterDisconnectHandler(self.setup_connection())
+        self.client.RegisterDisconnectHandler(self.setup_connection)
+        self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
+        self.setup_connection()
 
-    def __del__(self):
-        print 'stopping'
-        self.process_thread.join(0)
-        print self.process_thread.isAlive()
-        self.client.UnregisterDisconnectHandler(self.setup_connection())
+    def clean(self):
+        logging.info('Session %s start cleaning', self.jid)
+        self.client.UnregisterDisconnectHandler(self.setup_connection)
+
+        if 'TCPsocket' in self.client.__dict__:
+            sock = self.client.__dict__['TCPsocket']
+            sock._sock.shutdown(socket.SHUT_RDWR)
+            sock._sock.close()
+            sock.PlugOut()
+
+        logging.info('Session %s cleaning done',self.jid)
         
     def server_tuple(self):
         server_port = self.server.split(':')
@@ -64,9 +67,9 @@ class XMPPConnection():
         
     def debugging_handler(self, con, event):
         try:
-            print 'event',event
+            logging.debug('Event: %s',event)
         except UnicodeEncodeError:
-            print 'event','unknown encoding'
+            logging.debug('Event: UnicodeEncodeError Exception')
 
     def xmpp_message(self, con, event):
         type = event.getType()
@@ -91,7 +94,7 @@ class XMPPConnection():
             
             self.register_handlers()
             self.client.sendInitPresence()
-            self.process_thread.start()
+            #self.process_thread.start()
             
     def send(self,to_jid,message):
         self.setup_connection()
@@ -136,7 +139,7 @@ class XMPPConnection():
 
     def add_contact(self,jid):
         self.client.getRoster().Subscribe(jid)
-        self.client.Process(0.5)
+        self.client.Process(0.1)
 
     def remove_contact(self,jid):
         self.client.getRoster().Unauthorize(jid)
@@ -145,10 +148,27 @@ class XMPPConnection():
 
     def authorize_contact(self,jid):
         self.client.getRoster().Authorize(jid)
-        self.client.Process(0.5)
+        self.client.Process(0.1)
 
     def unauthorize_contact(self,jid):
         self.client.getRoster().Unauthorize(jid)
+
+
+class XMPPSessionThread(threading.Thread):
+    """Threaded XMPP session"""
+    def __init__(self, session):
+        super(XMPPSessionThread, self).__init__()
+        self.session = session
+        self.keepRunning = True
+
+    def run(self):
+        while self.keepRunning:
+            self.session.client.Process(1)
+
+        self.session.clean()
+
+    def stop(self):
+        self.keepRunning = False
         
 
 class XMPPSessionPool():
@@ -157,21 +177,63 @@ class XMPPSessionPool():
         
     def start_session(self,jid,password,server=None):
         session_id = jid
-        self.session_pool[session_id] = XMPPConnection(jid,password,server)
-        self.session_pool[session_id].setup_connection()
+        self.session_pool[session_id] = XMPPSessionThread(XMPPSession(jid,password,server))
+        self.session_pool[session_id].start()
         return session_id
 
     def close_session(self,session_id):
         session = self.session_pool[session_id]
+        session.stop()
+        session.join(0)
         del self.session_pool[session_id]
-        session.__del__()
         
     def session_for_id(self,session_id):
-        return self.session_pool[session_id]
+        return self.session_pool[session_id].session
 
     def __del__(self):
         for session_key in self.session_pool.keys():
             self.close_session(session_key)
+
+
+class XMPPPlugin(object):
+
+    name = 'xmpp_pool'
+    api = 2
+
+    def __init__(self,keyword = 'xmpp_pool'):
+        self.session_pool = XMPPSessionPool()
+        self.keyword = keyword
+
+    def setup(self, app):
+        ''' Make sure that other installed plugins don't affect the same
+            keyword argument.'''
+        for other in app.plugins:
+            if not isinstance(other, XMPPPlugin): continue
+            if other.keyword == self.keyword:
+                raise PluginError("Found another sqlite plugin with conflicting settings (non-unique keyword).")
+
+    def apply(self, callback, context):
+        # Override global configuration with route-specific values.
+        conf = context.config.get('xmpp_pool') or {}
+        keyword = conf.get('keyword', self.keyword)
+
+        # Test if the original callback accepts a 'db' keyword.
+        # Ignore it if it does not need a database handle.
+        args = inspect.getargspec(context.callback)[0]
+        if keyword not in args:
+            return callback
+
+        def wrapper(*args, **kwargs):
+            kwargs[keyword] = self.session_pool
+
+            rv = callback(*args, **kwargs)
+            return rv
+
+        # Replace the route callback with the wrapped one.
+        return wrapper
+
+    def __del__(self):
+        self.session_pool.__del__()
 
         
         

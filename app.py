@@ -1,15 +1,21 @@
 # -*- coding: utf-8 -*-
 
+__author__ = 'kovtash'
+
 import os
-import sys
-from bottle import Bottle, run, template, get, post, request, abort
 import json
-from xmpp_connection_pool import  XMPPSessionPool, XMPPConnection, XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
+import logging
+from bottle import Bottle, template, request, abort
+from xmpp_session_pool import  XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
+from xmpp_session_pool import XMPPPlugin
+
+xmpp_plugin = XMPPPlugin()
 
 app = Bottle(__name__)
+app.install(xmpp_plugin)
 
 @app.route('/')
-def start_session(): 
+def start_session(xmpp_pool):
     jid = request.query.get('jid')
     password = request.query.get('password')
     server = request.query.get('server')
@@ -20,7 +26,7 @@ def start_session():
         abort(400, json.dumps(response))
     
     try:
-        session_id = session_pool.start_session(jid,password,server)
+        session_id = xmpp_pool.start_session(jid,password,server)
         response['session']['session_id'] = session_id
     except XMPPAuthError:
         response['error'] = {'code':'XMPPAuthError','text':template('Service for {{jid}} can\'t authenticate on xmpp server',jid=jid)}
@@ -35,7 +41,7 @@ def start_session():
     return json.dumps(response)
     
 @app.route('/sessions/<session_id>')
-def session(session_id=None):
+def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
     
     if session_id is None:
@@ -43,7 +49,7 @@ def session(session_id=None):
         abort(400, json.dumps(response))
     
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -51,7 +57,7 @@ def session(session_id=None):
     return json.dumps(response)
 
 @app.route('/sessions/<session_id>/remove')
-def session(session_id=None):
+def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
 
     if session_id is None:
@@ -59,7 +65,7 @@ def session(session_id=None):
         abort(400, json.dumps(response))
 
     try:
-        session_pool.close_session(session_id)
+        xmpp_pool.close_session(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -67,7 +73,7 @@ def session(session_id=None):
     return json.dumps(response)
     
 @app.route('/sessions/<session_id>/contacts')
-def session_contacts(session_id=None):
+def session_contacts(xmpp_pool,session_id=None):
     response = {}
 
     jid = request.query.get('jid',None)
@@ -77,7 +83,7 @@ def session_contacts(session_id=None):
         abort(400, json.dumps(response))
 
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -92,7 +98,7 @@ def session_contacts(session_id=None):
     return json.dumps(response)
     
 @app.route('/sessions/<session_id>/contacts/<jid>')
-def session_contact(session_id=None,jid=None):
+def session_contact(xmpp_pool,session_id=None,jid=None):
     response = {}
     
     if session_id is None or jid is None:
@@ -100,7 +106,7 @@ def session_contact(session_id=None,jid=None):
         abort(400, json.dumps(response))
     
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -114,7 +120,7 @@ def session_contact(session_id=None,jid=None):
     return json.dumps(response)
 
 @app.route('/sessions/<session_id>/contacts/<jid>/authorize')
-def session_contact_authorize(session_id=None,jid=None):
+def session_contact_authorize(xmpp_pool,session_id=None,jid=None):
     response = {}
 
     if session_id is None or jid is None:
@@ -122,7 +128,7 @@ def session_contact_authorize(session_id=None,jid=None):
         abort(400, json.dumps(response))
 
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -138,7 +144,7 @@ def session_contact_authorize(session_id=None,jid=None):
     return json.dumps(response)
 
 @app.route('/sessions/<session_id>/contacts/<jid>/remove')
-def session_contact_remove(session_id=None,jid=None):
+def session_contact_remove(xmpp_pool,session_id=None,jid=None):
     response = {}
 
     if session_id is None or jid is None:
@@ -146,7 +152,7 @@ def session_contact_remove(session_id=None,jid=None):
         abort(400, json.dumps(response))
 
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -156,7 +162,7 @@ def session_contact_remove(session_id=None,jid=None):
     return json.dumps(response)
 
 @app.route('/sessions/<session_id>/contacts/<jid>/messages')
-def contact_messages(session_id=None,jid=None):
+def contact_messages(xmpp_pool,session_id=None,jid=None):
     message = request.query.get('message',None)
     response = {}
     
@@ -165,14 +171,14 @@ def contact_messages(session_id=None,jid=None):
         abort(400, json.dumps(response))    
     
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
         
-#    if message is None:
-#        response['messages'] = session.messages(jid)
-#        return json.dumps(response)
+    if message is None:
+        response['messages'] = session.messages(jid)
+        return json.dumps(response)
             
     try:
         session.send(jid,message)
@@ -185,7 +191,7 @@ def contact_messages(session_id=None,jid=None):
     return json.dumps(response)
 
 @app.route('/sessions/<session_id>/messages')
-def session_messages(session_id=None):
+def session_messages(xmpp_pool,session_id=None):
     message = request.query.get('message',None)
     jid = request.query.get('jid',None)
     response = {}
@@ -195,7 +201,7 @@ def session_messages(session_id=None):
         abort(400, json.dumps(response))
 
     try:
-        session = session_pool.session_for_id(session_id)
+        session = xmpp_pool.session_for_id(session_id)
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
@@ -217,15 +223,10 @@ def session_messages(session_id=None):
         abort(404, json.dumps(response))
 
     return json.dumps(response)
-    
 
 if __name__ == '__main__':
     # Bind to PORT if defined, otherwise default to 5000.
-    session_pool = XMPPSessionPool()
+    logging.basicConfig(level=logging.DEBUG)
     port = int(os.environ.get('PORT', 5000))
-    print 'start'
     app.run(host='0.0.0.0', port=port, server='cherrypy') #reloader=True
-    print 'stop'
-    session_pool.__del__()
-    print 'finish'
-    sys.exit(0)
+    xmpp_plugin.__del__()
