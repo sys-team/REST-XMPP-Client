@@ -1,4 +1,7 @@
-import os    
+# -*- coding: utf-8 -*-
+
+import os
+import sys
 from bottle import Bottle, run, template, get, post, request, abort
 import json
 from xmpp_connection_pool import  XMPPSessionPool, XMPPConnection, XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
@@ -46,21 +49,45 @@ def session(session_id=None):
         abort(404, json.dumps(response))
         
     return json.dumps(response)
+
+@app.route('/sessions/<session_id>/remove')
+def session(session_id=None):
+    response = {'session':{'session_id':session_id}}
+
+    if session_id is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
+        abort(400, json.dumps(response))
+
+    try:
+        session_pool.close_session(session_id)
+    except KeyError:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        abort(404, json.dumps(response))
+
+    return json.dumps(response)
     
 @app.route('/sessions/<session_id>/contacts')
 def session_contacts(session_id=None):
-    response = {'contacts':{}}
+    response = {}
+
+    jid = request.query.get('jid',None)
     
     if session_id is None:
         response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
         abort(400, json.dumps(response))
-    
+
     try:
         session = session_pool.session_for_id(session_id)
-        response['contacts'] = session.contacts()
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, json.dumps(response))
+
+    if jid is None:
+        response = {'contacts':{}}
+        response['contacts'] = session.contacts()
+    else:
+        session.add_contact(jid)
+        response['contact'] = session.contact(jid)
         
     return json.dumps(response)
     
@@ -85,7 +112,49 @@ def session_contact(session_id=None,jid=None):
         abort(404, json.dumps(response))
         
     return json.dumps(response)
-    
+
+@app.route('/sessions/<session_id>/contacts/<jid>/authorize')
+def session_contact_authorize(session_id=None,jid=None):
+    response = {}
+
+    if session_id is None or jid is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
+        abort(400, json.dumps(response))
+
+    try:
+        session = session_pool.session_for_id(session_id)
+    except KeyError:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        abort(404, json.dumps(response))
+
+
+    if jid in session.contacts():
+        session.authorize_contact(jid)
+        response['contact'] = session.contact(jid)
+    else:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no contact with id {{jid}}',jid=jid)}
+        abort(404, json.dumps(response))
+
+    return json.dumps(response)
+
+@app.route('/sessions/<session_id>/contacts/<jid>/remove')
+def session_contact_remove(session_id=None,jid=None):
+    response = {}
+
+    if session_id is None or jid is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
+        abort(400, json.dumps(response))
+
+    try:
+        session = session_pool.session_for_id(session_id)
+    except KeyError:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        abort(404, json.dumps(response))
+
+    session.remove_contact(jid)
+
+    return json.dumps(response)
+
 @app.route('/sessions/<session_id>/contacts/<jid>/messages')
 def contact_messages(session_id=None,jid=None):
     message = request.query.get('message',None)
@@ -154,4 +223,9 @@ if __name__ == '__main__':
     # Bind to PORT if defined, otherwise default to 5000.
     session_pool = XMPPSessionPool()
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, reloader=True, server='cherrypy')
+    print 'start'
+    app.run(host='0.0.0.0', port=port, server='cherrypy') #reloader=True
+    print 'stop'
+    session_pool.__del__()
+    print 'finish'
+    sys.exit(0)

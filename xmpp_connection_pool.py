@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import xmpp
 import os
 import logging
@@ -39,6 +41,12 @@ class XMPPConnection():
         self.messages_store = {}
         self.process_thread = XMPPProcessThread(self.client)
         self.client.RegisterDisconnectHandler(self.setup_connection())
+
+    def __del__(self):
+        print 'stopping'
+        self.process_thread.join(0)
+        print self.process_thread.isAlive()
+        self.client.UnregisterDisconnectHandler(self.setup_connection())
         
     def server_tuple(self):
         server_port = self.server.split(':')
@@ -55,7 +63,10 @@ class XMPPConnection():
         self.client.Dispatcher.RegisterDefaultHandler(self.debugging_handler)
         
     def debugging_handler(self, con, event):
-        print 'event',event
+        try:
+            print 'event',event
+        except UnicodeEncodeError:
+            print 'event','unknown encoding'
 
     def xmpp_message(self, con, event):
         type = event.getType()
@@ -122,6 +133,22 @@ class XMPPConnection():
 
     def all_messages(self):
         return self.messages_store
+
+    def add_contact(self,jid):
+        self.client.getRoster().Subscribe(jid)
+        self.client.Process(0.5)
+
+    def remove_contact(self,jid):
+        self.client.getRoster().Unauthorize(jid)
+        self.client.getRoster().Unsubscribe(jid)
+        self.client.getRoster().delItem(jid)
+
+    def authorize_contact(self,jid):
+        self.client.getRoster().Authorize(jid)
+        self.client.Process(0.5)
+
+    def unauthorize_contact(self,jid):
+        self.client.getRoster().Unauthorize(jid)
         
 
 class XMPPSessionPool():
@@ -133,11 +160,19 @@ class XMPPSessionPool():
         self.session_pool[session_id] = XMPPConnection(jid,password,server)
         self.session_pool[session_id].setup_connection()
         return session_id
+
+    def close_session(self,session_id):
+        session = self.session_pool[session_id]
+        del self.session_pool[session_id]
+        session.__del__()
         
     def session_for_id(self,session_id):
         return self.session_pool[session_id]
-    
-    
+
+    def __del__(self):
+        for session_key in self.session_pool.keys():
+            self.close_session(session_key)
+
         
         
         
