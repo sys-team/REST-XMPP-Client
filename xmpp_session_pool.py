@@ -113,7 +113,6 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         return self._data[self.itemId(jid[:(jid+'/').find('/')])]['resources'].keys()
 
     def getItemByJID(self,jid):
-        print('by JID',self.itemId(jid))
         return self.getItem(self.itemId(jid))
 
 class XMPPSecureClient(xmpp.Client):
@@ -150,10 +149,14 @@ class XMPPSession():
     def clean(self):
         logging.info('Session %s start cleaning', self.jid)
         self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
+        self.client.Dispatcher.disconnect()
 
         if 'TCPsocket' in self.client.__dict__:
             sock = self.client.__dict__['TCPsocket']
-            sock._sock.shutdown(socket.SHUT_RDWR)
+            try:
+                sock._sock.shutdown(socket.SHUT_RDWR)
+            except:
+                logging.info('Session %s socket shutdowned', self.jid)
             sock._sock.close()
             sock.PlugOut()
 
@@ -204,15 +207,19 @@ class XMPPSession():
             self.client.sendInitPresence()
             
     def send(self,contact_id,message):
+        jid = self.client.getRoster().getItem(contact_id)['jid']
+        self.sendByJID(jid,message)
+
+    def sendByJID(self,jid,message):
         self.setup_connection()
         if self.client.isConnected():
-            jid = self.client.getRoster().getItem(contact_id)['jid']
             id = self.client.send(xmpp.protocol.Message(jid,message))
             if not id:
                 raise XMPPSendError()
             return id
         else:
             raise XMPPSendError()
+
             
     def contacts(self):
         if self.client.isConnected():
@@ -248,7 +255,7 @@ class XMPPSession():
 
     def add_contact(self,jid):
         self.client.getRoster().Subscribe(jid)
-        self.client.Process(0.5)
+        self.client.Dispatcher.Process(0.5)
 
     def remove_contact(self,contact_id):
         jid = self.client.getRoster().getItem(contact_id)['jid']
@@ -259,7 +266,7 @@ class XMPPSession():
     def authorize_contact(self,contact_id):
         jid = self.client.getRoster().getItem(contact_id)['jid']
         self.client.getRoster().Authorize(jid)
-        self.client.Process(0.5)
+        self.client.Dispatcher.Process(0.5)
 
     def unauthorize_contact(self,contact_id):
         jid = self.client.getRoster().getItem(contact_id)['jid']

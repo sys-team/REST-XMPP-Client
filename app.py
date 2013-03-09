@@ -13,6 +13,33 @@ xmpp_plugin = XMPPPlugin()
 app = Bottle(__name__)
 app.install(xmpp_plugin)
 
+def raise_message_sending_error(response):
+    response['error'] = {'code':'XMPPSendError','text':'Message sending failed'}
+    abort(404, response)
+
+def raise_contact_error(contact_id,response):
+    response['error'] = {'code':'XMPPSessionError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
+    abort(404, response)
+
+def check_session_id(session_id,response):
+    if session_id is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing session_id parameter'}
+        abort(400, response)
+
+def check_contact_id(contact_id,response):
+    if contact_id is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing contact_id parameter'}
+        abort(400, response)
+
+def get_session(xmpp_pool,session_id,response):
+    try:
+        session = xmpp_pool.session_for_id(session_id)
+        return session
+    except KeyError:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        abort(404, response)
+
+
 @app.route('/')
 def start_session(xmpp_pool):
     jid = request.query.get('jid')
@@ -38,30 +65,22 @@ def start_session(xmpp_pool):
         abort(502, response)
     
     return response
-    
+
 @app.route('/sessions/<session_id>')
 def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
     
-    if session_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
-    
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,response)
         
     return response
 
-@app.route('/sessions/<session_id>/remove')
+@app.delete('/sessions/<session_id>')
+@app.route('/sessions/<session_id>/delete')
 def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
 
-    if session_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
+    check_session_id(session_id,response)
 
     try:
         xmpp_pool.close_session(session_id)
@@ -69,23 +88,16 @@ def session(xmpp_pool,session_id=None):
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, response)
 
-    return response
+    return
     
 @app.route('/sessions/<session_id>/contacts')
 def session_contacts(xmpp_pool,session_id=None):
     response = {}
 
     jid = request.query.get('jid',None)
-    
-    if session_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
 
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,response)
 
     if jid is None:
         response = {'contacts':{}}
@@ -99,22 +111,15 @@ def session_contacts(xmpp_pool,session_id=None):
 @app.route('/sessions/<session_id>/contacts/<contact_id>')
 def session_contact(xmpp_pool,session_id=None,contact_id=None):
     response = {}
-    
-    if session_id is None or contact_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
-    
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
+
+    check_session_id(session_id,response)
+    check_contact_id(contact_id,response)
+    session = get_session(xmpp_pool,session_id,response)
         
     try:
         response['contact'] = session.contact(contact_id)
     except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
-        abort(404, response)
+        raise_contact_error(contact_id,response)
         
     return response
 
@@ -122,82 +127,57 @@ def session_contact(xmpp_pool,session_id=None,contact_id=None):
 def session_contact_authorize(xmpp_pool,session_id=None,contact_id=None):
     response = {}
 
-    if session_id is None or contact_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
-
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
-
+    check_session_id(session_id,response)
+    check_contact_id(contact_id,response)
+    session = get_session(xmpp_pool,session_id,response)
 
     if contact_id in session.contacts():
         session.authorize_contact(contact_id)
         response['contact'] = session.contact(contact_id)
     else:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
-        abort(404, response)
+        raise_contact_error(contact_id,response)
 
     return response
 
-@app.route('/sessions/<session_id>/contacts/<contact_id>/remove')
+@app.delete('/sessions/<session_id>/contacts/<contact_id>')
+@app.route('/sessions/<session_id>/contacts/<contact_id>/delete')
 def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
     response = {}
 
-    if session_id is None or contact_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
-
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
+    check_session_id(session_id,response)
+    check_contact_id(contact_id,response)
+    session = get_session(xmpp_pool,session_id,response)
 
     try:
         session.remove_contact(contact_id)
     except TypeError:
-        response['error'] = {'code':'XMPPContactError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
-        abort(404, response)
+        raise_contact_error(contact_id,response)
 
-    return response
+    return
 
 @app.route('/sessions/<session_id>/contacts/<contact_id>/messages')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
-    message = request.query.get('message',None)
     response = {}
-    
-    if session_id is None or contact_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)    
-    
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
+
+    message = request.query.get('message',None)
+
+    check_session_id(session_id,response)
+    check_contact_id(contact_id,response)
+    session = get_session(xmpp_pool,session_id,response)
         
     if message is None:
         try:
             response['messages'] = session.messages(contact_id)
         except TypeError:
-            response['error'] = {'code':'XMPPContactError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
-            abort(404, response)
+            raise_contact_error(contact_id,response)
     else:
+        response['message'] = {'text':message}
         try:
-            session.send(contact_id,message)
+            response['message']['id'] = session.send(contact_id,message)
         except XMPPSendError:
-            response['error'] = {'code':'XMPPSendError','text':template('Message sending failed')}
-            abort(404, response)
-
+            raise_message_sending_error(response)
         except TypeError:
-            response['error'] = {'code':'XMPPContactError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
-            abort(404, response)
-
-        
-    response['message'] = message
+            raise_contact_error(contact_id,response)
         
     return response
 
@@ -205,33 +185,34 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 def session_messages(xmpp_pool,session_id=None):
     message = request.query.get('message',None)
     contact_id = request.query.get('contact_id',None)
+    jid = request.query.get('jid',None)
     response = {}
 
-    if session_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,response)
 
-    try:
-        session = xmpp_pool.session_for_id(session_id)
-    except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
-        abort(404, response)
-
-    if  message is None and contact_id is None:
+    if  message is None and contact_id is None and jid is None:
         response['messages'] = session.all_messages()
-        return response
+    else:
+        if message is None:
+            response['error'] = {'code':'XMPPServiceParametersError','text':'Missing message parameter'}
+            abort(400, response)
 
-    if message is None or contact_id is None:
-        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
-        abort(400, response)
-
-    response['message'] = {'jid':contact_id,'text':message}
-
-    try:
-        response['message']['id'] = session.send(contact_id,message)
-    except XMPPSendError:
-        response['error'] = {'code':'XMPPSendError','text':template('Message sending failed')}
-        abort(404, response)
+        response['message'] = {'contact_id':contact_id,'text':message}
+        try:
+            if contact_id is not None:
+                response['message']['contact_id'] = contact_id
+                response['message']['id'] = session.send(contact_id,message)
+            elif jid is not None:
+                response['message']['jid'] = jid
+                response['message']['id'] = session.sendByJID(jid,message)
+            else:
+                response['error'] = {'code':'XMPPServiceParametersError','text':'Missing contact_id or jid parameter'}
+                abort(400, response)
+        except XMPPSendError:
+            raise_message_sending_error(response)
+        except TypeError:
+            raise_contact_error(contact_id,response)
 
     return response
 
