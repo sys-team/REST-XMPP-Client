@@ -54,6 +54,8 @@ def start_session(xmpp_pool):
     try:
         session_id = xmpp_pool.start_session(jid,password,server)
         response['session']['session_id'] = session_id
+        session = get_session(xmpp_pool,session_id,response)
+        response['session']['token'] = session.token
     except XMPPAuthError:
         response['error'] = {'code':'XMPPAuthError','text':template('Service for {{jid}} can\'t authenticate on xmpp server',jid=jid)}
         abort(502, response)
