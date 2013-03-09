@@ -8,7 +8,7 @@ from bottle import Bottle, template, request, abort
 from xmpp_session_pool import  XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
 from xmpp_session_pool import XMPPPlugin
 
-xmpp_plugin = XMPPPlugin()
+xmpp_plugin = XMPPPlugin(debug=True)
 
 app = Bottle(__name__)
 app.install(xmpp_plugin)

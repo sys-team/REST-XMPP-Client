@@ -342,8 +342,8 @@ class XMPPPlugin(object):
     name = 'xmpp_pool'
     api = 2
 
-    def __init__(self,keyword = 'xmpp_pool'):
-        self.session_pool = XMPPSessionPool(debug=True)
+    def __init__(self,keyword = 'xmpp_pool',debug=False):
+        self.session_pool = XMPPSessionPool(debug=debug)
         self.keyword = keyword
 
     def setup(self, app):
