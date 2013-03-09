@@ -17,8 +17,8 @@ WEB-api
 #### Информация о сессии
 - GET `http://server.name/sessions/some_sesion_id`
 
-#### Сообщения сессии
-- GET `http://server.name/sessions/some_sesion_id/messages`
+#### Чаты сессии
+- GET `http://server.name/sessions/some_sesion_id/chats`
 
 #### Список контактов
 - GET `http://server.name/sessions/some_sesion_id/contacts`
@@ -26,8 +26,8 @@ WEB-api
 #### Информация о контакте
 - GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id`
 
-#### Сообщения от контакта
-- GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id/messages`
+#### Чат контакта
+- GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id/chat`
 
 #### Добавления контакта
 - GET `http://server.name/sessions/some_sesion_id/contacts?jid=some_jid`

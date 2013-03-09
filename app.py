@@ -155,7 +155,7 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
 
     return
 
-@app.route('/sessions/<session_id>/contacts/<contact_id>/messages')
+@app.route('/sessions/<session_id>/contacts/<contact_id>/chat')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     response = {}
 
@@ -181,7 +181,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
         
     return response
 
-@app.route('/sessions/<session_id>/messages')
+@app.route('/sessions/<session_id>/chats')
 def session_messages(xmpp_pool,session_id=None):
     message = request.query.get('message',None)
     contact_id = request.query.get('contact_id',None)

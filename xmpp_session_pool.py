@@ -8,6 +8,7 @@ import threading
 import inspect
 import socket
 import uuid
+import time
 
 from bottle import PluginError
 
@@ -133,15 +134,17 @@ class XMPPSecureClient(xmpp.Client):
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
 class XMPPSession():
-    def __init__(self,jid,password,server=None):
+    def __init__(self,jid,password,server=None,max_message_size = 512, chat_buffer_size=100):
         self.jid = xmpp.protocol.JID(jid)
         if  server is None:
             server = self.jid.getDomain()
         self.password=password
         self.server = server
+        self.max_message_size = max_message_size
+        self.chat_buffer_size = chat_buffer_size
         #self.client = xmpp.Client(self.jid.getDomain(),debug = [])
         self.client = XMPPSecureClient(self.jid.getDomain(),debug = [])
-        self.messages_store = {}
+        self.chats_store = {}
         self.client.RegisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.setup_connection()
@@ -182,16 +185,29 @@ class XMPPSession():
         except UnicodeEncodeError:
             logging.debug('Event: UnicodeEncodeError Exception')
 
+
+    def append_message(self,jid,inbound,id,text):
+        if jid not in self.chats_store:
+            self.chats_store[jid] = []
+
+        for i in xrange(0, len(text), self.max_message_size):
+            self.chats_store[jid].append({'id':id,
+                                             'inbound':inbound,
+                                             'text':text[i:i+self.max_message_size],
+                                             'time-stamp':time.time()
+            })
+
+        if len(self.chats_store[jid]) > self.chat_buffer_size:
+            for i in xrange (0,len(self.chats_store[jid])-self.chat_buffer_size):
+                self.chats_store[jid].pop(0)
+
     def xmpp_message(self, con, event):
         type = event.getType()
         jid_from = event.getFrom().getStripped()
 
-        if jid_from not in self.messages_store:
-            self.messages_store[jid_from] = []
-        
         message_text = event.getBody()
         if  message_text is not None:
-            self.messages_store[jid_from].append({'id':event.getID(),'text':message_text})
+            self.append_message(jid=jid_from,inbound=True,id=event.getID(),text=message_text)
         
     def setup_connection(self):         
         if not self.client.isConnected():
@@ -208,7 +224,7 @@ class XMPPSession():
             
     def send(self,contact_id,message):
         jid = self.client.getRoster().getItem(contact_id)['jid']
-        self.sendByJID(jid,message)
+        return self.sendByJID(jid,message)
 
     def sendByJID(self,jid,message):
         self.setup_connection()
@@ -216,6 +232,8 @@ class XMPPSession():
             id = self.client.send(xmpp.protocol.Message(jid,message))
             if not id:
                 raise XMPPSendError()
+
+            self.append_message(jid=jid,inbound=False,id=id,text=message)
             return id
         else:
             raise XMPPSendError()
@@ -246,12 +264,12 @@ class XMPPSession():
     def messages(self,contact_id):
         try:
             jid = self.client.getRoster().getItem(contact_id)['jid']
-            return self.messages_store[jid]
+            return self.chats_store[jid]
         except KeyError:
             return []
 
     def all_messages(self):
-        return self.messages_store
+        return self.chats_store
 
     def add_contact(self,jid):
         self.client.getRoster().Subscribe(jid)
