@@ -40,7 +40,7 @@ def get_session(xmpp_pool,session_id,response):
         abort(404, response)
 
 
-@app.route('/')
+@app.route('/auth')
 def start_session(xmpp_pool):
     jid = request.query.get('jid')
     password = request.query.get('password')

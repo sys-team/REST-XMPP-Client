@@ -6,7 +6,7 @@ HTTP-шлюз для работы с серверами xmpp
 WEB-api
 =========
 #### Начало сесии 
-- GET `http://server.name/?jid=(user_jid)&password=(password)&server=(server)`
+- GET `http://server.name/auth/?jid=(user_jid)&password=(password)&server=(server)`
 Ответ:
 ```
 {"session": 
