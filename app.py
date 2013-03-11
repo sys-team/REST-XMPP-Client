@@ -8,7 +8,7 @@ from bottle import Bottle, template, request, abort
 from xmpp_session_pool import  XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
 from xmpp_session_pool import XMPPPlugin
 
-xmpp_plugin = XMPPPlugin(debug=True)
+xmpp_plugin = XMPPPlugin(debug=False)
 
 app = Bottle(__name__)
 app.install(xmpp_plugin)
@@ -50,12 +50,13 @@ def start_session(xmpp_pool):
     if jid is None or password is None or server is None:
         response['error'] = {'code':'XMPPServiceParametersError','text':'Missing required parameters'}
         abort(400, response)
-    
+
     try:
         session_id = xmpp_pool.start_session(jid,password,server)
         response['session']['session_id'] = session_id
         session = get_session(xmpp_pool,session_id,response)
         response['session']['token'] = session.token
+        response['session']['jid'] = session.jid.getStripped()
     except XMPPAuthError:
         response['error'] = {'code':'XMPPAuthError','text':template('Service for {{jid}} can\'t authenticate on xmpp server',jid=jid)}
         abort(502, response)
@@ -74,7 +75,8 @@ def session(xmpp_pool,session_id=None):
     
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,response)
-        
+    response['session']['jid'] = session.jid.getStripped()
+
     return response
 
 @app.delete('/sessions/<session_id>')

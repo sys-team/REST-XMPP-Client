@@ -56,6 +56,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 raise xmpp.protocol.NodeProcessed             # a MUST
             self.DEBUG('Setting roster item %s...'%item_id,'ok')
             if not self._data.has_key(item_id): self._data[item_id]={}
+            self._data[item_id]['id']=item_id
             self._data[item_id]['jid']=jid
             self._data[item_id]['name']=item.getAttr('name')
             self._data[item_id]['ask']=item.getAttr('ask')
@@ -222,6 +223,8 @@ class XMPPSession():
             
             self.register_handlers()
             self.client.sendInitPresence()
+            self.client.getRoster()
+            self.client.Dispatcher.Process(5)
             
     def send(self,contact_id,message):
         jid = self.client.getRoster().getItem(contact_id)['jid']
@@ -242,7 +245,8 @@ class XMPPSession():
             
     def contacts(self):
         if self.client.isConnected():
-            return self.client.getRoster().getRawRoster()
+            raw_roster = self.client.getRoster().getRawRoster()
+            return raw_roster.values()
         else:
             raise XMPPRosterError()
             
