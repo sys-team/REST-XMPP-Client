@@ -134,6 +134,25 @@ class XMPPSecureClient(xmpp.Client):
         if requestRoster: XMPPSecureRoster().PlugIn(self)
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
+
+class XMPPNotificationPoller():
+    def __init__(self,timeout=60,poll_interval=1):
+        self.is_notification_available = False
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+
+    def run(self):
+        while not self.is_notification_available:
+            self.timeout -= self.poll_interval
+            if  self.timeout < 0:
+                return False
+
+            time.sleep(self.poll_interval)
+        return True
+
+    def notify(self):
+        self.is_notification_available = True
+
 class XMPPSession():
     def __init__(self,jid,password,server=None,max_message_size = 512, chat_buffer_size=100):
         self.token = uuid.uuid4().hex
@@ -150,11 +169,13 @@ class XMPPSession():
         self.client.RegisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.setup_connection()
+        self.poller_pool = []
 
     def clean(self):
         logging.info('Session %s start cleaning', self.jid)
         self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.Dispatcher.disconnect()
+        self.send_notification()
 
         if 'TCPsocket' in self.client.__dict__:
             sock = self.client.__dict__['TCPsocket']
@@ -192,16 +213,23 @@ class XMPPSession():
         if jid not in self.chats_store:
             self.chats_store[jid] = []
 
+        messages = []
+
         for i in xrange(0, len(text), self.max_message_size):
-            self.chats_store[jid].append({'id':id,
-                                             'inbound':inbound,
-                                             'text':text[i:i+self.max_message_size],
-                                             'time-stamp':time.time()
+            messages.append({'id':id,
+                             'inbound':inbound,
+                             'text':text[i:i+self.max_message_size],
+                             'time-stamp':time.time()
             })
+
+        for message in messages:
+            self.chats_store[jid].append(message)
 
         if len(self.chats_store[jid]) > self.chat_buffer_size:
             for i in xrange (0,len(self.chats_store[jid])-self.chat_buffer_size):
                 self.chats_store[jid].pop(0)
+
+        return messages
 
     def xmpp_message(self, con, event):
         type = event.getType()
@@ -210,6 +238,7 @@ class XMPPSession():
         message_text = event.getBody()
         if  message_text is not None:
             self.append_message(jid=jid_from,inbound=True,id=event.getID(),text=message_text)
+            self.send_notification()
         
     def setup_connection(self):         
         if not self.client.isConnected():
@@ -237,8 +266,7 @@ class XMPPSession():
             if not id:
                 raise XMPPSendError()
 
-            self.append_message(jid=jid,inbound=False,id=id,text=message)
-            return id
+            return self.append_message(jid=jid,inbound=False,id=id,text=message)
         else:
             raise XMPPSendError()
 
@@ -295,6 +323,17 @@ class XMPPSession():
         jid = self.client.getRoster().getItem(contact_id)['jid']
         self.client.getRoster().Unauthorize(jid)
 
+    def send_notification(self):
+        for poller in self.poller_pool:
+            poller.notify()
+
+    def poll_changes(self):
+        poller = XMPPNotificationPoller()
+        self.poller_pool.append(poller)
+        result = poller.run()
+        self.poller_pool.remove(poller)
+        return result
+
 
 class XMPPSessionThread(threading.Thread):
     """Threaded XMPP session"""
@@ -306,6 +345,7 @@ class XMPPSessionThread(threading.Thread):
     def run(self):
         while self.keepRunning:
             self.session.client.Process(1)
+            time.sleep(1)
 
         self.session.clean()
 

@@ -93,6 +93,16 @@ def session(xmpp_pool,session_id=None):
         abort(404, response)
 
     return
+
+@app.route('/sessions/<session_id>/changes')
+def session(xmpp_pool,session_id=None):
+    response = {'session':{'session_id':session_id}}
+
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,response)
+    if not session.poll_changes():
+        abort(404, response)
+    return response
     
 @app.route('/sessions/<session_id>/contacts')
 def session_contacts(xmpp_pool,session_id=None):
@@ -175,9 +185,8 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
         except TypeError:
             raise_contact_error(contact_id,response)
     else:
-        response['message'] = {'text':message}
         try:
-            response['message']['id'] = session.send(contact_id,message)
+            response['messages'] = session.send(contact_id,message)
         except XMPPSendError:
             raise_message_sending_error(response)
         except TypeError:
