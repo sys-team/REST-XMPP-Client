@@ -154,7 +154,7 @@ class XMPPNotificationPoller():
         self.is_notification_available = True
 
 class XMPPSession():
-    def __init__(self,jid,password,server=None,max_message_size = 512, chat_buffer_size=100):
+    def __init__(self,jid,password,server=None,max_message_size = 512, chat_buffer_size=50):
         self.token = uuid.uuid4().hex
         self.jid = xmpp.protocol.JID(jid)
         if  server is None:
