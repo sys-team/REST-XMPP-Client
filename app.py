@@ -40,11 +40,11 @@ def get_session(xmpp_pool,session_id,response):
         abort(404, response)
 
 
-@app.route('/auth')
+@app.post('/start-session')
 def start_session(xmpp_pool):
-    jid = request.query.get('jid')
-    password = request.query.get('password')
-    server = request.query.get('server')
+    jid = request.forms.get('jid')
+    password = request.forms.get('password')
+    server = request.forms.get('server')
     response = {'session':{}}
     
     if jid is None or password is None or server is None:
@@ -169,7 +169,7 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
 
     return
 
-@app.route('/sessions/<session_id>/contacts/<contact_id>/chat')
+@app.get('/sessions/<session_id>/contacts/<contact_id>/chat')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     response = {}
 
@@ -194,34 +194,32 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
         
     return response
 
-@app.route('/sessions/<session_id>/chats')
-def session_messages(xmpp_pool,session_id=None):
-    message = request.query.get('message',None)
-    contact_id = request.query.get('contact_id',None)
-    jid = request.query.get('jid',None)
+@app.post('/sessions/<session_id>/contacts/<contact_id>/chat')
+def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     response = {}
 
+    if request.json is None:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+        abort(400, response)
+
+    try:
+        message = request.json['messages']['text']
+    except KeyError:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+        abort(400, response)
+
     check_session_id(session_id,response)
+    check_contact_id(contact_id,response)
     session = get_session(xmpp_pool,session_id,response)
 
-    if  message is None and contact_id is None and jid is None:
-        response['messages'] = session.all_messages()
-    else:
-        if message is None:
-            response['error'] = {'code':'XMPPServiceParametersError','text':'Missing message parameter'}
-            abort(400, response)
-
-        response['message'] = {'contact_id':contact_id,'text':message}
+    if message is None:
         try:
-            if contact_id is not None:
-                response['message']['contact_id'] = contact_id
-                response['message']['id'] = session.send(contact_id,message)
-            elif jid is not None:
-                response['message']['jid'] = jid
-                response['message']['id'] = session.sendByJID(jid,message)
-            else:
-                response['error'] = {'code':'XMPPServiceParametersError','text':'Missing contact_id or jid parameter'}
-                abort(400, response)
+            response['messages'] = session.messages(contact_id)
+        except TypeError:
+            raise_contact_error(contact_id,response)
+    else:
+        try:
+            response['messages'] = session.send(contact_id,message)
         except XMPPSendError:
             raise_message_sending_error(response)
         except TypeError:
