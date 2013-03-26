@@ -31,13 +31,24 @@ def check_contact_id(contact_id,response):
         response['error'] = {'code':'XMPPServiceParametersError','text':'Missing contact_id parameter'}
         abort(400, response)
 
-def get_session(xmpp_pool,session_id,response):
+def get_session(xmpp_pool,session_id,request,response):
+    auth_header = request.get_header('Authorization')
+
+    if auth_header is None:
+        response['error'] = {'code':'XMPPAuthError','text':template('No authorization information provided')}
+        abort(502, response)
+
     try:
         session = xmpp_pool.session_for_id(session_id)
-        return session
     except KeyError:
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, response)
+
+    if not auth_header[7:] == session.token:
+        response['error'] = {'code':'XMPPAuthError','text':template('Wrong authorization data')}
+        abort(502, response)
+
+    return session
 
 
 @app.post('/start-session')
@@ -54,9 +65,12 @@ def start_session(xmpp_pool):
     try:
         session_id = xmpp_pool.start_session(jid,password,server)
         response['session']['session_id'] = session_id
-        session = get_session(xmpp_pool,session_id,response)
+        session = xmpp_pool.session_for_id(session_id)
         response['session']['token'] = session.token
         response['session']['jid'] = session.jid.getStripped()
+    except KeyError:
+        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        abort(404, response)
     except XMPPAuthError:
         response['error'] = {'code':'XMPPAuthError','text':template('Service for {{jid}} can\'t authenticate on xmpp server',jid=jid)}
         abort(502, response)
@@ -74,7 +88,7 @@ def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
     
     check_session_id(session_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
     response['session']['jid'] = session.jid.getStripped()
 
     return response
@@ -99,7 +113,7 @@ def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
 
     check_session_id(session_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
     if not session.poll_changes():
         abort(404, response)
     return response
@@ -111,7 +125,7 @@ def session_contacts(xmpp_pool,session_id=None):
     jid = request.query.get('jid',None)
 
     check_session_id(session_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
 
     if jid is None:
         response = {'contacts':{}}
@@ -128,7 +142,7 @@ def session_contact(xmpp_pool,session_id=None,contact_id=None):
 
     check_session_id(session_id,response)
     check_contact_id(contact_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
         
     try:
         response['contact'] = session.contact(contact_id)
@@ -143,7 +157,7 @@ def session_contact_authorize(xmpp_pool,session_id=None,contact_id=None):
 
     check_session_id(session_id,response)
     check_contact_id(contact_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
 
     if contact_id in session.contacts():
         session.authorize_contact(contact_id)
@@ -160,7 +174,7 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
 
     check_session_id(session_id,response)
     check_contact_id(contact_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
 
     try:
         session.remove_contact(contact_id)
@@ -177,7 +191,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 
     check_session_id(session_id,response)
     check_contact_id(contact_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
         
     if message is None:
         try:
@@ -210,7 +224,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 
     check_session_id(session_id,response)
     check_contact_id(contact_id,response)
-    session = get_session(xmpp_pool,session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
 
     if message is None:
         try:
