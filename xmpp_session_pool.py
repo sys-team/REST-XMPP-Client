@@ -9,6 +9,7 @@ import inspect
 import socket
 import uuid
 import time
+import operator
 
 from bottle import PluginError
 
@@ -31,6 +32,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
     def __init__(self):
         xmpp.roster.Roster.__init__(self)
         self.uuid_namespace = uuid.uuid4()
+        self._resources = {}
 
     def plugin(self,owner,request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
@@ -42,7 +44,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         if request: self.Request()
 
     def itemId(self,jid):
-        return uuid.uuid3(self.uuid_namespace,jid.encode('utf8')).hex
+        return uuid.uuid3(self.uuid_namespace,jid.lower().encode('utf8')).hex
 
     def RosterIqHandler(self,dis,stanza):
         """ Subscription tracker. Used internally for setting items state in
@@ -56,15 +58,23 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 raise xmpp.protocol.NodeProcessed             # a MUST
             self.DEBUG('Setting roster item %s...'%item_id,'ok')
             if not self._data.has_key(item_id): self._data[item_id]={}
-            self._data[item_id]['id']=item_id
-            self._data[item_id]['jid']=jid
-            self._data[item_id]['name']=item.getAttr('name')
-            self._data[item_id]['ask']=item.getAttr('ask')
-            self._data[item_id]['subscription']=item.getAttr('subscription')
-            self._data[item_id]['groups']=[]
-            if not self._data[item_id].has_key('resources'): self._data[item_id]['resources']={}
-            for group in item.getTags('group'): self._data[item_id]['groups'].append(group.getData())
-        self._data[self._owner.User+'@'+self._owner.Server]={'resources':{},'name':None,'ask':None,'subscription':None,'groups':None,}
+            roster_item = self._data[item_id]
+            roster_item['id']=item_id
+            roster_item['jid']=jid
+            roster_item['name']=item.getAttr('name')
+            roster_item['ask']=item.getAttr('ask')
+            roster_item['subscription']=item.getAttr('subscription')
+            roster_item['groups']=[]
+            roster_item['timestamp']=time.time()
+            if not roster_item.has_key('show'):
+                roster_item['show']='offline'
+            if not roster_item.has_key('status'):
+                roster_item['status']=None
+            if not roster_item.has_key('priority'):
+                roster_item['priority']=-128
+            for group in item.getTags('group'):
+                roster_item['groups'].append(group.getData())
+        #self._data[self._owner.User+'@'+self._owner.Server]={'resources':{},'name':None,'ask':None,'subscription':None,'groups':None,}
         self.set=1
         raise xmpp.protocol.NodeProcessed   # a MUST. Otherwise you'll get back an <iq type='error'/>
 
@@ -74,26 +84,63 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         jid=xmpp.protocol.JID(pres.getFrom())
         item_id = self.itemId(jid.getStripped())
 
-        if not self._data.has_key(item_id): self._data[item_id]={'name':None,'ask':None,'subscription':'none','groups':['Not in roster'],'resources':{}}
+        self_jid = self._owner.User+'@'+self._owner.Server
+        self_jid = self_jid.lower()
+        if  self_jid == jid.getStripped():
+            self.DEBUG('Presence from own clients')
+            return
+
+        if not self._data.has_key(item_id): self._data[item_id]={'jid':jid.getStripped(),'name':None,'ask':None,'subscription':'none','groups':['Not in roster'],'priority':0}
+        if not self._resources.has_key(item_id): self._resources[item_id] = {}
 
         item=self._data[item_id]
+        item_resources = self._resources[item_id]
         typ=pres.getType()
 
         if not typ:
             self.DEBUG('Setting roster item %s for resource %s...'%(jid.getStripped(),jid.getResource()),'ok')
-            item['resources'][jid.getResource()]=res={'show':None,'status':None,'priority':'0','timestamp':None}
-            if pres.getTag('show'): res['show']=pres.getShow()
-            if pres.getTag('status'): res['status']=pres.getStatus()
-            if pres.getTag('priority'): res['priority']=pres.getPriority()
-            if not pres.getTimestamp(): pres.setTimestamp()
-            res['timestamp']=pres.getTimestamp()
-        elif typ=='unavailable' and item['resources'].has_key(jid.getResource()): del item['resources'][jid.getResource()]
+            item_resources[jid.getResource()]=res={'show':'online','status':None,'priority':0,'nick':None}
+
+            if pres.getTag('priority'):
+                res['priority']=int(pres.getPriority())
+            if pres.getTag('show'):
+                res['show']=pres.getShow()
+            if pres.getTag('status'):
+                res['status']=pres.getStatus()
+
+            if res['priority'] >= item['priority']:
+                item['priority'] = res['priority']
+                item['show'] = res['show']
+                item['status'] = res['status']
+                item['timestamp'] = time.time()
+
+            if pres.getTag('nick'):
+                res['nick']=pres.getTagData('nick')
+                if item['name'] is None and res['nick'] is not None:
+                    item['name'] = res['nick']
+                    item['timestamp'] = time.time()
+
+
+        elif typ=='unavailable' and item_resources.has_key(jid.getResource()):
+            del item_resources[jid.getResource()]
+            if len(item_resources):
+                res = max(item_resources.iteritems(), key=operator.itemgetter(1))[0]
+                item['priority'] = res['priority']
+                item['show'] = res['show']
+                item['status'] = res['status']
+                item['timestamp'] = time.time()
+            else:
+                item['priority'] = -128
+                item['show'] = 'offline'
+                item['status'] = None
+                item['timestamp'] = time.time()
         # Need to handle type='error' also
 
     def _getItemData(self,jid,dataname):
         """ Return specific jid's representation in internal format. Used internally. """
         jid=jid[:(jid+'/').find('/')]
         return self._data[self.itemId(jid)][dataname]
+
     def _getResourceData(self,jid,dataname):
         """ Return specific jid's resource representation in internal format. Used internally. """
         if jid.find('/')+1:
@@ -133,7 +180,6 @@ class XMPPSecureClient(xmpp.Client):
             Can also request roster from server if according agrument is set."""
         if requestRoster: XMPPSecureRoster().PlugIn(self)
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
-
 
 class XMPPNotificationPoller():
     def __init__(self,timeout=60,poll_interval=1):
@@ -271,12 +317,13 @@ class XMPPSession():
             raise XMPPSendError()
 
             
-    def contacts(self):
-        if self.client.isConnected():
-            raw_roster = self.client.getRoster().getRawRoster()
-            return raw_roster.values()
-        else:
+    def contacts(self,from_timestamp=None):
+        if not self.client.isConnected():
             raise XMPPRosterError()
+
+        raw_roster = self.client.getRoster().getRawRoster()
+        return raw_roster.values()
+
             
     def contact(self,contact_id):
         if self.client.isConnected():
