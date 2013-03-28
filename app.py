@@ -21,6 +21,10 @@ def raise_contact_error(contact_id,response):
     response['error'] = {'code':'XMPPSessionError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
     abort(404, response)
 
+def raise_value_error(parameter_name,response):
+    response['error'] = {'code':'XMPPServiceParametersError','text':template('Parameter {{parameter}} has wrong value',parameter=parameter_name)}
+    abort(400, response)
+
 def check_session_id(session_id,response):
     if session_id is None:
         response['error'] = {'code':'XMPPServiceParametersError','text':'Missing session_id parameter'}
@@ -30,6 +34,17 @@ def check_contact_id(contact_id,response):
     if contact_id is None:
         response['error'] = {'code':'XMPPServiceParametersError','text':'Missing contact_id parameter'}
         abort(400, response)
+
+def get_offset(request,response):
+    offset = request.query.get('offset',None)
+
+    if offset is not None:
+        try:
+            offset = float(offset)
+        except ValueError:
+            raise_value_error('offset',response)
+
+    return offset
 
 def get_session(xmpp_pool,session_id,request,response):
     auth_header = request.get_header('Authorization')
@@ -120,19 +135,17 @@ def session(xmpp_pool,session_id=None):
     
 @app.route('/sessions/<session_id>/contacts')
 def session_contacts(xmpp_pool,session_id=None):
+    """
+        Request parameters:
+            offset - returns contacts which has been changed since offset or has messages with timestamp greater than offset
+    """
     response = {}
 
-    jid = request.query.get('jid',None)
-
+    offset = get_offset(request,response)
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
 
-    if jid is None:
-        response = {'contacts':{}}
-        response['contacts'] = session.contacts()
-    else:
-        session.add_contact(jid)
-        response['contact'] = session.contactByJID(jid)
+    response['contacts'] = session.contacts(timestamp=offset)
         
     return response
     
@@ -185,26 +198,21 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
 
 @app.get('/sessions/<session_id>/contacts/<contact_id>/chat')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
+    """
+        Request parameters:
+            offset - returns messages with timestamp greater that offset
+    """
     response = {}
 
-    message = request.query.get('message',None)
-
+    offset = get_offset(request,response)
     check_session_id(session_id,response)
     check_contact_id(contact_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
-        
-    if message is None:
-        try:
-            response['messages'] = session.messages(contact_id)
-        except TypeError:
-            raise_contact_error(contact_id,response)
-    else:
-        try:
-            response['messages'] = session.send(contact_id,message)
-        except XMPPSendError:
-            raise_message_sending_error(response)
-        except TypeError:
-            raise_contact_error(contact_id,response)
+
+    try:
+        response['messages'] = session.messages(contact_ids=[contact_id],timestamp=offset)
+    except TypeError:
+        raise_contact_error(contact_id,response)
         
     return response
 
@@ -228,7 +236,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 
     if message is None:
         try:
-            response['messages'] = session.messages(contact_id)
+            response['messages'] = session.messages(contact_ids=[contact_id])
         except TypeError:
             raise_contact_error(contact_id,response)
     else:
