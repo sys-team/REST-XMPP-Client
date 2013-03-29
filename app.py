@@ -124,7 +124,7 @@ def session(xmpp_pool,session_id=None):
 
     return
 
-@app.route('/sessions/<session_id>/changes')
+@app.route('/sessions/<session_id>/notification')
 def session(xmpp_pool,session_id=None):
     response = {'session':{'session_id':session_id}}
 

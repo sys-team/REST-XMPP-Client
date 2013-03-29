@@ -67,7 +67,6 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             roster_item['name']=item.getAttr('name')
             roster_item['ask']=item.getAttr('ask')
             roster_item['subscription']=item.getAttr('subscription')
-            roster_item['groups']=[]
             roster_item['timestamp']=time.time()
             if not roster_item.has_key('show'):
                 roster_item['show']='offline'
@@ -75,6 +74,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 roster_item['status']=None
             if not roster_item.has_key('priority'):
                 roster_item['priority']=-128
+            roster_item['groups']=[]
             for group in item.getTags('group'):
                 roster_item['groups'].append(group.getData())
         #self._data[self._owner.User+'@'+self._owner.Server]={'resources':{},'name':None,'ask':None,'subscription':None,'groups':None,}
@@ -247,7 +247,8 @@ class XMPPMessagesStore():
             messages.append({'id':id,
                              'inbound':inbound,
                              'text':text[i:i+self.max_message_size],
-                             'timestamp':time.time()
+                             'timestamp':time.time(),
+                             'contact_id':jid
             })
 
         for message in messages:
@@ -271,15 +272,6 @@ class XMPPMessagesStore():
 
         if timestamp is not None:
             result = filter(lambda message: message['timestamp'] > timestamp,result)
-
-        return result
-
-    def messages_by_jid(self,timestamp=None):
-        result = self.chats_store.copy()
-
-        if timestamp is not None:
-            for jid in result.iterkeys():
-                result[jid] = filter(lambda message: message['timestamp'] > timestamp,result[jid])
 
         return result
 
@@ -348,10 +340,11 @@ class XMPPSession():
     def xmpp_message(self, con, event):
         type = event.getType()
         jid_from = event.getFrom().getStripped()
+        contact_id = self.client.getRoster().itemId(jid_from)
 
         message_text = event.getBody()
         if  message_text is not None:
-            self.messages_store.append_message(jid=jid_from,inbound=True,id=event.getID(),text=message_text)
+            self.messages_store.append_message(jid=contact_id,inbound=True,id=event.getID(),text=message_text)
             self.send_notification()
             if self.push_notifier is not None:
                 self.push_notifier.notify()
@@ -382,7 +375,10 @@ class XMPPSession():
             if not id:
                 raise XMPPSendError()
 
-            return self.messages_store.append_message(jid=jid,inbound=False,id=id,text=message)
+            contact_id = self.client.getRoster().itemId(jid)
+            result = self.messages_store.append_message(jid=contact_id,inbound=False,id=id,text=message)
+            self.send_notification()
+            return result
         else:
             raise XMPPSendError()
 
@@ -393,19 +389,9 @@ class XMPPSession():
 
         roster = self.client.getRoster().getRawRoster().values()
         if  timestamp is not None:
-            roster = self.client.getRoster().getRawRoster().values()
-
-            messages = self.messages_store.messages_by_jid(timestamp=timestamp)
-            for contact in roster:
-                if messages.has_key(contact['jid']):
-                    contact['message_count']=len(messages[contact['jid']])
-                else:
-                    contact['message_count']=0
-
-            roster = filter(lambda contact: contact['timestamp'] > timestamp or contact['message_count']>0,roster)
+            roster = filter(lambda contact: contact['timestamp'] > timestamp,roster)
 
         return roster
-
             
     def contact(self,contact_id):
         if self.client.isConnected():
@@ -424,15 +410,7 @@ class XMPPSession():
             raise XMPPRosterError()
 
     def messages(self,contact_ids=None,timestamp=None):
-        jids = None
-        if contact_ids is not None:
-            jids = []
-            for contact in contact_ids:
-                try:
-                    jids.append(self.client.getRoster().getItem(contact)['jid'])
-                except KeyError:
-                    pass
-        return self.messages_store.messages(jids=jids,timestamp=timestamp)
+        return self.messages_store.messages(jids=contact_ids,timestamp=timestamp)
 
     def add_contact(self,jid):
         self.client.getRoster().Subscribe(jid)
@@ -475,7 +453,7 @@ class XMPPSessionThread(threading.Thread):
     def run(self):
         while self.keepRunning:
             self.session.client.Process(1)
-            time.sleep(1)
+            #time.sleep(1)
 
         self.session.clean()
 
