@@ -283,8 +283,6 @@ class XMPPMessagesStore():
 
         return result
 
-
-
     def all_messages(self):
         return self.chats_store
 
@@ -300,6 +298,7 @@ class XMPPSession():
         self.client.RegisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.messages_store = XMPPMessagesStore()
+        self.push_notifier = None
         if push_token is not None:
             self.push_notifier = XMPPPushNotification(push_token)
         self.setup_connection()
@@ -310,8 +309,10 @@ class XMPPSession():
         self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.Dispatcher.disconnect()
         self.send_notification()
-        self.push_notifier.stop()
-        self.push_notifier.join(0)
+
+        if self.push_notifier is not None:
+            self.push_notifier.stop()
+            self.push_notifier.join(0)
 
         if 'TCPsocket' in self.client.__dict__:
             sock = self.client.__dict__['TCPsocket']
@@ -352,7 +353,8 @@ class XMPPSession():
         if  message_text is not None:
             self.messages_store.append_message(jid=jid_from,inbound=True,id=event.getID(),text=message_text)
             self.send_notification()
-            self.push_notifier.notify()
+            if self.push_notifier is not None:
+                self.push_notifier.notify()
         
     def setup_connection(self):         
         if not self.client.isConnected():
