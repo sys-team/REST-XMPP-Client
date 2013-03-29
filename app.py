@@ -71,6 +71,7 @@ def start_session(xmpp_pool):
     jid = request.forms.get('jid')
     password = request.forms.get('password')
     server = request.forms.get('server')
+    push_token = request.forms.get('push_token')
     response = {'session':{}}
     
     if jid is None or password is None or server is None:
@@ -78,7 +79,7 @@ def start_session(xmpp_pool):
         abort(400, response)
 
     try:
-        session_id = xmpp_pool.start_session(jid,password,server)
+        session_id = xmpp_pool.start_session(jid,password,server,push_token)
         response['session']['session_id'] = session_id
         session = xmpp_pool.session_for_id(session_id)
         response['session']['token'] = session.token
@@ -131,6 +132,25 @@ def session(xmpp_pool,session_id=None):
     session = get_session(xmpp_pool,session_id,request,response)
     if not session.poll_changes():
         abort(404, response)
+    return response
+
+@app.route('/sessions/<session_id>/messages')
+def session(xmpp_pool,session_id=None):
+    """
+        Request parameters:
+            offset - returns messages with timestamp greater that offset
+    """
+    response = {}
+
+    offset = get_offset(request,response)
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
+
+    try:
+        response['messages'] = session.messages(timestamp=offset)
+    except TypeError:
+        raise_contact_error(contact_id,response)
+
     return response
     
 @app.route('/sessions/<session_id>/contacts')
@@ -196,7 +216,7 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
 
     return
 
-@app.get('/sessions/<session_id>/contacts/<contact_id>/chat')
+@app.get('/sessions/<session_id>/contacts/<contact_id>/messages')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     """
         Request parameters:
@@ -216,7 +236,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
         
     return response
 
-@app.post('/sessions/<session_id>/contacts/<contact_id>/chat')
+@app.post('/sessions/<session_id>/contacts/<contact_id>/messages')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     response = {}
 

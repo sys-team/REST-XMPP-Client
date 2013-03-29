@@ -10,6 +10,9 @@ import socket
 import uuid
 import time
 import operator
+import urllib
+import urllib2
+from urllib2 import URLError
 
 from bottle import PluginError
 
@@ -199,6 +202,35 @@ class XMPPNotificationPoller():
     def notify(self):
         self.is_notification_available = True
 
+class XMPPPushNotification(threading.Thread):
+    """Threaded XMPP session"""
+    def __init__(self,push_token):
+        if  push_token is None:
+            raise ValueError
+        super(XMPPPushNotification, self).__init__()
+        self.keepRunning = True
+        self.notifications=[]
+        self.start()
+
+    def run(self):
+        while self.keepRunning:
+            for i in xrange(len(self.notifications)):
+                notification = self.notifications.pop()
+                post_data = urllib.urlencode({'token':'dbc7eb47411e86599c909cbbaa24cfec6777724cdd87412e4e6e892975a09cc6','message':'{"aps":{"alert":"Message received","sound" : "chime"}}'})
+                try:
+                    urllib2.urlopen('https://apns-aws.unact.ru/im-dev',data=post_data)
+                except URLError:
+                    print(URLError,post_data)
+                    logging.error('Push service response error')
+                    self.notifications.append(notification)
+            time.sleep(1)
+
+    def stop(self):
+        self.keepRunning = False
+
+    def notify(self):
+        self.notifications.append('Message recived')
+
 class XMPPMessagesStore():
     def __init__(self,max_message_size = 512, chat_buffer_size=50):
         self.max_message_size = max_message_size
@@ -257,7 +289,7 @@ class XMPPMessagesStore():
         return self.chats_store
 
 class XMPPSession():
-    def __init__(self,jid,password,server=None):
+    def __init__(self,jid,password,server=None,push_token=None):
         self.token = uuid.uuid4().hex
         self.jid = xmpp.protocol.JID(jid)
         if  server is None:
@@ -268,6 +300,8 @@ class XMPPSession():
         self.client.RegisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.messages_store = XMPPMessagesStore()
+        if push_token is not None:
+            self.push_notifier = XMPPPushNotification(push_token)
         self.setup_connection()
         self.poller_pool = []
 
@@ -276,6 +310,8 @@ class XMPPSession():
         self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.Dispatcher.disconnect()
         self.send_notification()
+        self.push_notifier.stop()
+        self.push_notifier.join(0)
 
         if 'TCPsocket' in self.client.__dict__:
             sock = self.client.__dict__['TCPsocket']
@@ -316,6 +352,7 @@ class XMPPSession():
         if  message_text is not None:
             self.messages_store.append_message(jid=jid_from,inbound=True,id=event.getID(),text=message_text)
             self.send_notification()
+            self.push_notifier.notify()
         
     def setup_connection(self):         
         if not self.client.isConnected():
@@ -449,12 +486,12 @@ class XMPPSessionPool():
         self.session_pool = {}
         self.debug = debug
         
-    def start_session(self,jid,password,server=None):
+    def start_session(self,jid,password,server=None,push_token=None):
         if  self.debug:
             session_id = jid
         else:
             session_id = uuid.uuid4().hex
-        self.session_pool[session_id] = XMPPSessionThread(XMPPSession(jid,password,server))
+        self.session_pool[session_id] = XMPPSessionThread(XMPPSession(jid,password,server,push_token))
         self.session_pool[session_id].start()
         return session_id
 
