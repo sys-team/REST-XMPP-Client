@@ -148,6 +148,7 @@ def session(xmpp_pool,session_id=None):
 
     try:
         response['messages'] = session.messages(timestamp=offset)
+        session.reset_new_messages_counter()
     except TypeError:
         raise_contact_error(contact_id,response)
 
@@ -231,6 +232,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 
     try:
         response['messages'] = session.messages(contact_ids=[contact_id],timestamp=offset)
+        session.reset_new_messages_counter()
     except TypeError:
         raise_contact_error(contact_id,response)
         

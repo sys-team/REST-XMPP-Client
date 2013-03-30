@@ -13,6 +13,7 @@ import operator
 import urllib
 import urllib2
 from urllib2 import URLError
+import json
 
 from bottle import PluginError
 
@@ -207,6 +208,8 @@ class XMPPPushNotification(threading.Thread):
     def __init__(self,push_token):
         if  push_token is None:
             raise ValueError
+
+        self.push_token = push_token
         super(XMPPPushNotification, self).__init__()
         self.keepRunning = True
         self.notifications=[]
@@ -216,7 +219,7 @@ class XMPPPushNotification(threading.Thread):
         while self.keepRunning:
             for i in xrange(len(self.notifications)):
                 notification = self.notifications.pop()
-                post_data = urllib.urlencode({'token':'dbc7eb47411e86599c909cbbaa24cfec6777724cdd87412e4e6e892975a09cc6','message':'{"aps":{"alert":"Message received","sound" : "chime"}}'})
+                post_data = urllib.urlencode({'token':self.push_token,'message':json.dumps(notification)})
                 try:
                     urllib2.urlopen('https://apns-aws.unact.ru/im-dev',data=post_data)
                 except URLError:
@@ -228,8 +231,16 @@ class XMPPPushNotification(threading.Thread):
     def stop(self):
         self.keepRunning = False
 
-    def notify(self):
-        self.notifications.append('Message recived')
+    def notify(self,message=None,unread_count=None):
+        notification = {'aps':{'sound':'chime'}}
+        if  message is not None:
+            if len(message) > 100:
+                message = message[:97]+'...'
+            notification['aps']['alert']=message
+
+        if unread_count is not None:
+            notification['aps']['badge']=unread_count
+        self.notifications.append(notification)
 
 class XMPPMessagesStore():
     def __init__(self,max_message_size = 512, chat_buffer_size=50):
@@ -295,6 +306,7 @@ class XMPPSession():
             self.push_notifier = XMPPPushNotification(push_token)
         self.setup_connection()
         self.poller_pool = []
+        self.new_messages_count = 0
 
     def clean(self):
         logging.info('Session %s start cleaning', self.jid)
@@ -345,9 +357,12 @@ class XMPPSession():
         message_text = event.getBody()
         if  message_text is not None:
             self.messages_store.append_message(jid=contact_id,inbound=True,id=event.getID(),text=message_text)
+            self.new_messages_count+=1
             self.send_notification()
             if self.push_notifier is not None:
-                self.push_notifier.notify()
+                contact = self.client.getRoster().getItem(contact_id)
+                message = ''.join([contact['name'],': \n',message_text])
+                self.push_notifier.notify(message=message,unread_count=self.new_messages_count)
         
     def setup_connection(self):         
         if not self.client.isConnected():
@@ -363,6 +378,9 @@ class XMPPSession():
             self.client.sendInitPresence()
             self.client.getRoster()
             self.client.Dispatcher.Process(5)
+
+    def reset_new_messages_counter(self):
+        self.new_messages_count = 0
             
     def send(self,contact_id,message):
         jid = self.client.getRoster().getItem(contact_id)['jid']
