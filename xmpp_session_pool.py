@@ -185,30 +185,41 @@ class XMPPSecureClient(xmpp.Client):
         if requestRoster: XMPPSecureRoster().PlugIn(self)
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
-class XMPPNotificationPoller():
+class XMPPPollNotification():
     def __init__(self,timeout=60,poll_interval=1):
-        self.is_notification_available = False
+        self.is_notification_available = threading.Condition()
+        self.poller_pool = []
         self.timeout = timeout
         self.poll_interval = poll_interval
+        self.keepRunning = True
 
-    def run(self):
-        while not self.is_notification_available:
-            self.timeout -= self.poll_interval
-            if  self.timeout < 0:
-                return False
-
-            time.sleep(self.poll_interval)
-        return True
+    def poll(self):
+        self.is_notification_available.acquire()
+        start_time = time.time()
+        if self.keepRunning:
+            self.is_notification_available.wait(self.timeout+1)
+        self.is_notification_available.release()
+        waiting_time = time.time()-start_time
+        if waiting_time > self.timeout or not self.keepRunning:
+            return False
+        else:
+            return True
 
     def notify(self):
-        self.is_notification_available = True
+        self.is_notification_available.acquire()
+        self.is_notification_available.notify_all()
+        self.is_notification_available.release()
+
+    def stop(self):
+        self.keepRunning = False
+        self.notify()
 
 class XMPPPushNotification(threading.Thread):
-    """Threaded XMPP session"""
     def __init__(self,push_token):
         if  push_token is None:
             raise ValueError
 
+        self.notification_lock = threading.Lock()
         self.push_token = push_token
         super(XMPPPushNotification, self).__init__()
         self.keepRunning = True
@@ -217,6 +228,7 @@ class XMPPPushNotification(threading.Thread):
 
     def run(self):
         while self.keepRunning:
+            self.notification_lock.acquire()
             for i in xrange(len(self.notifications)):
                 notification = self.notifications.pop()
                 post_data = urllib.urlencode({'token':self.push_token,'message':json.dumps(notification)})
@@ -226,12 +238,14 @@ class XMPPPushNotification(threading.Thread):
                     print(URLError,post_data)
                     logging.error('Push service response error')
                     self.notifications.append(notification)
-            time.sleep(1)
 
     def stop(self):
         self.keepRunning = False
+        self.notification_lock.acquire(False)
+        self.notification_lock.release()
 
     def notify(self,message=None,unread_count=None):
+        self.notification_lock.acquire(False)
         notification = {'aps':{'sound':'chime'}}
         if  message is not None:
             if len(message) > 100:
@@ -241,6 +255,7 @@ class XMPPPushNotification(threading.Thread):
         if unread_count is not None:
             notification['aps']['badge']=unread_count
         self.notifications.append(notification)
+        self.notification_lock.release()
 
 class XMPPMessagesStore():
     def __init__(self,max_message_size = 512, chat_buffer_size=50):
@@ -304,16 +319,17 @@ class XMPPSession():
         self.push_notifier = None
         if push_token is not None:
             self.push_notifier = XMPPPushNotification(push_token)
-        self.setup_connection()
-        self.poller_pool = []
+        self.poll_notifier = XMPPPollNotification()
         self.new_messages_count = 0
+
+        self.setup_connection()
 
     def clean(self):
         logging.info('Session %s start cleaning', self.jid)
         self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.Dispatcher.disconnect()
-        self.send_notification()
 
+        self.poll_notifier.stop()
         if self.push_notifier is not None:
             self.push_notifier.stop()
             self.push_notifier.join(0)
@@ -340,6 +356,7 @@ class XMPPSession():
         return (server,port)
         
     def register_handlers(self):
+        self.client.Dispatcher.RegisterHandler('presence',self.xmpp_presence)
         self.client.Dispatcher.RegisterHandler('message',self.xmpp_message)
         self.client.Dispatcher.RegisterDefaultHandler(self.debugging_handler)
         
@@ -348,6 +365,9 @@ class XMPPSession():
             logging.debug('Event: %s',event)
         except UnicodeEncodeError:
             logging.debug('Event: UnicodeEncodeError Exception')
+
+    def xmpp_presence(self, con, event):
+        self.poll_notifier.notify()
 
     def xmpp_message(self, con, event):
         type = event.getType()
@@ -358,7 +378,7 @@ class XMPPSession():
         if  message_text is not None:
             self.messages_store.append_message(jid=contact_id,inbound=True,id=event.getID(),text=message_text)
             self.new_messages_count+=1
-            self.send_notification()
+            self.poll_notifier.notify()
             if self.push_notifier is not None:
                 contact = self.client.getRoster().getItem(contact_id)
                 message = ''.join([contact['name'],': \n',message_text])
@@ -395,7 +415,7 @@ class XMPPSession():
 
             contact_id = self.client.getRoster().itemId(jid)
             result = self.messages_store.append_message(jid=contact_id,inbound=False,id=id,text=message)
-            self.send_notification()
+            self.poll_notifier.notify()
             return result
         else:
             raise XMPPSendError()
@@ -449,16 +469,8 @@ class XMPPSession():
         jid = self.client.getRoster().getItem(contact_id)['jid']
         self.client.getRoster().Unauthorize(jid)
 
-    def send_notification(self):
-        for poller in self.poller_pool:
-            poller.notify()
-
     def poll_changes(self):
-        poller = XMPPNotificationPoller()
-        self.poller_pool.append(poller)
-        result = poller.run()
-        self.poller_pool.remove(poller)
-        return result
+        return self.poll_notifier.poll()
 
 
 class XMPPSessionThread(threading.Thread):
