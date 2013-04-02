@@ -7,6 +7,7 @@ import logging
 from bottle import Bottle, template, request, abort
 from xmpp_session_pool import  XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
 from xmpp_session_pool import XMPPPlugin
+import resource
 
 xmpp_plugin = XMPPPlugin(debug=False)
 
@@ -270,6 +271,30 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
             raise_contact_error(contact_id,response)
 
     return response
+
+@app.route('/server-status')
+def server_status(xmpp_pool):
+    response = {}
+    response['memory'] = {}
+
+    memory_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
+    if 1024 < memory_value < 1024*1024:
+        response['memory']['value'] = memory_value / float(1024)
+        response['memory']['units'] = 'kB'
+    elif 1024*1024 < memory_value < 1024*1024*1024:
+        response['memory']['value'] = memory_value / float(1024*1024)
+        response['memory']['units'] = 'MB'
+    elif 1024*1024*1024 < memory_value < 1024*1024*1024*1024:
+        response['memory']['value'] = memory_value / float(1024*1024*1024)
+        response['memory']['units'] = 'GB'
+    else:
+        response['memory']['value'] = memory_value
+        response['memory']['units'] = 'B'
+
+    response['sessions'] = len(xmpp_pool.session_pool.keys())
+    return response
+
 
 if __name__ == '__main__':
     # Bind to PORT if defined, otherwise default to 5000.
