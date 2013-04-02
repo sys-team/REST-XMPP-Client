@@ -14,6 +14,7 @@ import urllib
 import urllib2
 from urllib2 import URLError
 import json
+from multiprocessing import Process
 
 from bottle import PluginError
 
@@ -230,12 +231,16 @@ class XMPPPushNotification(threading.Thread):
             for i in xrange(len(self.notifications)):
                 notification = self.notifications.pop()
                 post_data = urllib.urlencode({'token':self.push_token,'message':json.dumps(notification)})
-                try:
-                    urllib2.urlopen('https://apns-aws.unact.ru/im-dev',data=post_data)
-                except URLError:
-                    print(URLError,post_data)
-                    logging.error('Push service response error')
-                    self.notifications.append(notification)
+                p = Process(target=self.send_notification, args=(post_data,))
+                p.start()
+                p.join()
+
+    def send_notification(self,post_data):
+        try:
+            urllib2.urlopen('https://apns-aws.unact.ru/im-dev',data=post_data)
+        except URLError:
+            logging.error('Push service response error')
+            #self.notifications.append(notification)
 
     def stop(self):
         self.keepRunning = False
@@ -280,7 +285,7 @@ class XMPPMessagesStore():
 
         if len(self.chats_store[jid]) > self.chat_buffer_size:
             for i in xrange (0,len(self.chats_store[jid])-self.chat_buffer_size):
-                self.chats_store[jid].pop(0)
+                del self.chats_store[jid][0]
 
         return messages
 
