@@ -37,6 +37,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         xmpp.roster.Roster.__init__(self)
         self.uuid_namespace = uuid.uuid4()
         self._resources = {}
+        self.default_priority = -128
 
     def plugin(self,owner,request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
@@ -74,7 +75,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             if not roster_item.has_key('status'):
                 roster_item['status']=None
             if not roster_item.has_key('priority'):
-                roster_item['priority']=-128
+                roster_item['priority']=self.default_priority
             roster_item['groups']=[]
             for group in item.getTags('group'):
                 roster_item['groups'].append(group.getData())
@@ -94,13 +95,14 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             self.DEBUG('Presence from own clients')
             return
 
-        if not self._data.has_key(item_id): self._data[item_id]={'jid':jid.getStripped(),'name':None,'ask':None,'subscription':'none','groups':['Not in roster'],'priority':0}
+        if not self._data.has_key(item_id): self._data[item_id]={'jid':jid.getStripped(),'name':None,'ask':None,'subscription':'none','groups':['Not in roster'],'priority':self.default_priority}
         if not self._resources.has_key(item_id): self._resources[item_id] = {}
 
         item=self._data[item_id]
         item_resources = self._resources[item_id]
         typ=pres.getType()
 
+        item['timestamp'] = time.time()
         if not typ:
             self.DEBUG('Setting roster item %s for resource %s...'%(jid.getStripped(),jid.getResource()),'ok')
             item_resources[jid.getResource()]=res={'show':'online','status':None,'priority':0,'nick':None}
@@ -116,28 +118,24 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 item['priority'] = res['priority']
                 item['show'] = res['show']
                 item['status'] = res['status']
-                item['timestamp'] = time.time()
 
             if pres.getTag('nick'):
                 res['nick']=pres.getTagData('nick')
                 if item['name'] is None and res['nick'] is not None:
                     item['name'] = res['nick']
-                    item['timestamp'] = time.time()
 
 
         elif typ=='unavailable' and item_resources.has_key(jid.getResource()):
             del item_resources[jid.getResource()]
             if len(item_resources):
-                res = max(item_resources.iteritems(), key=operator.itemgetter(1))[0]
+                res = max(item_resources.itervalues(), key=operator.itemgetter('priority'))
                 item['priority'] = res['priority']
                 item['show'] = res['show']
                 item['status'] = res['status']
-                item['timestamp'] = time.time()
             else:
-                item['priority'] = -128
+                item['priority'] = self.default_priority
                 item['show'] = 'offline'
                 item['status'] = None
-                item['timestamp'] = time.time()
         # Need to handle type='error' also
 
     def _getItemData(self,jid,dataname):
