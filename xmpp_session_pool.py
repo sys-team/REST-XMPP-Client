@@ -239,7 +239,7 @@ class XMPPPushNotification(threading.Thread):
         try:
             urllib2.urlopen('https://apns-aws.unact.ru/im-dev',data=post_data)
         except URLError:
-            logging.error('Push service response error')
+            logging.error('%s : PushEvent :Push service response error',time.ctime())
             #self.notifications.append(notification)
 
     def stop(self):
@@ -328,7 +328,7 @@ class XMPPSession():
         self.setup_connection()
 
     def clean(self):
-        logging.info('Session %s start cleaning', self.jid)
+        logging.debug('%s: SessionEvent : Session %s start cleaning', time.ctime(),self.jid)
         self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
         self.client.Dispatcher.disconnect()
 
@@ -342,11 +342,11 @@ class XMPPSession():
             try:
                 sock._sock.shutdown(socket.SHUT_RDWR)
             except:
-                logging.info('Session %s socket shutdowned', self.jid)
+                logging.debug('%s: SessionEvent : Session %s socket shutdowned', time.ctime(), self.jid)
             sock._sock.close()
             sock.PlugOut()
 
-        logging.info('Session %s cleaning done',self.jid)
+        logging.debug('%s: SessionEvent : Session %s cleaning done',time.ctime(), self.jid)
         
     def server_tuple(self):
         server_port = self.server.split(':')
@@ -365,9 +365,9 @@ class XMPPSession():
         
     def debugging_handler(self, con, event):
         try:
-            logging.debug('Event: %s',event)
+            logging.debug('%s : XMPPEvent : %s',time.ctime(),event)
         except UnicodeEncodeError:
-            logging.debug('Event: UnicodeEncodeError Exception')
+            logging.debug('%s : XMPPEvent : UnicodeEncodeError Exception',time.ctime())
 
     def xmpp_presence(self, con, event):
         self.poll_notifier.notify()
@@ -537,7 +537,7 @@ class XMPPPlugin(object):
         for other in app.plugins:
             if not isinstance(other, XMPPPlugin): continue
             if other.keyword == self.keyword:
-                raise PluginError("Found another sqlite plugin with conflicting settings (non-unique keyword).")
+                raise PluginError("Found another %s plugin with conflicting settings (non-unique keyword).",self.name)
 
     def apply(self, callback, context):
         # Override global configuration with route-specific values.
