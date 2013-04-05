@@ -4,10 +4,11 @@ __author__ = 'kovtash'
 
 import os
 import logging
-from bottle import Bottle, template, request, abort
+from bottle import Bottle, template, request, abort, error, response
 from xmpp_session_pool import  XMPPAuthError, XMPPConnectionError, XMPPSendError, XMPPRosterError, XMPPSendError
 from xmpp_session_pool import XMPPPlugin
 import resource
+import json
 
 xmpp_plugin = XMPPPlugin(debug=False)
 
@@ -51,7 +52,7 @@ def get_session(xmpp_pool,session_id,request,response):
     auth_header = request.get_header('Authorization')
 
     if auth_header is None:
-        response['error'] = {'code':'XMPPAuthError','text':template('No authorization information provided')}
+        response['error'] = {'code':'XMPPAuthError','text':'No authorization information provided'}
         abort(502, response)
 
     try:
@@ -61,11 +62,34 @@ def get_session(xmpp_pool,session_id,request,response):
         abort(404, response)
 
     if not auth_header[7:] == session.token:
-        response['error'] = {'code':'XMPPAuthError','text':template('Wrong authorization data')}
-        abort(502, response)
+        response['error'] = {'code':'XMPPAuthError','text':'Wrong authorization data'}
+        abort(401, response)
 
     return session
 
+def error_body(error):
+    response.content_type = 'application/json'
+    return json.dumps(error.output)
+
+@app.error(400)
+def error400(error):
+    return error_body(error)
+
+@app.error(401)
+def error400(error):
+    return error_body(error)
+
+@app.error(404)
+def error404(error):
+    return error_body(error)
+
+@app.error(500)
+def error500(error):
+    return error_body(error)
+
+@app.error(502)
+def error502(error):
+    return error_body(error)
 
 @app.post('/start-session')
 def start_session(xmpp_pool):
@@ -89,13 +113,13 @@ def start_session(xmpp_pool):
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, response)
     except XMPPAuthError:
-        response['error'] = {'code':'XMPPAuthError','text':template('Service for {{jid}} can\'t authenticate on xmpp server',jid=jid)}
+        response['error'] = {'code':'XMPPUpstreamAuthError','text':template('Can\'t authenticate on XMPP server with jid {{jid}}',jid=jid)}
         abort(502, response)
     except XMPPConnectionError as error:
-        response['error'] = {'code':'XMPPConnectionError','text':template('Service can\'t connect to xmpp server {{server}}',server=error.server)}
+        response['error'] = {'code':'XMPPUpstreamConnectionError','text':template('Can\'t connect to XMPP server {{server}}',server=error.server)}
         abort(502, response)
     except XMPPSendError:
-        response['error'] = {'code':'XMPPConnectionError','text':'Message was not sent'}
+        response['error'] = {'code':'XMPPUpstreamConnectionError','text':'Message was not sent'}
         abort(502, response)
     
     return response
@@ -113,7 +137,7 @@ def session(xmpp_pool,session_id=None):
 @app.delete('/sessions/<session_id>')
 @app.route('/sessions/<session_id>/delete')
 def session(xmpp_pool,session_id=None):
-    response = {'session':{'session_id':session_id}}
+    response = {}
 
     check_session_id(session_id,response)
 
@@ -123,7 +147,7 @@ def session(xmpp_pool,session_id=None):
         response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, response)
 
-    return
+    return response
 
 @app.route('/sessions/<session_id>/notification')
 def session(xmpp_pool,session_id=None):
@@ -216,7 +240,7 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
     except TypeError:
         raise_contact_error(contact_id,response)
 
-    return
+    return response
 
 @app.get('/sessions/<session_id>/contacts/<contact_id>/messages')
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):

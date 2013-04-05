@@ -390,13 +390,14 @@ class XMPPSession():
     def setup_connection(self):         
         if not self.client.isConnected():
             con = self.client.connect(server=self.server_tuple())
-            if con is None:
+
+            if not self.client.isConnected() or con is None:
                 raise XMPPConnectionError(self.server)
                 
             auth = self.client.auth(self.jid.getNode(),self.password,resource = self.jid.getResource())
             if not auth:
                 raise XMPPAuthError()
-            
+
             self.register_handlers()
             self.client.sendInitPresence()
             self.client.getRoster()
