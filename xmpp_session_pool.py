@@ -329,7 +329,7 @@ class XMPPSession():
 
     def clean(self):
         logging.debug('%s: SessionEvent : Session %s start cleaning', time.ctime(),self.jid)
-        self.client.UnregisterDisconnectHandler(self.client.reconnectAndReauth)
+        self.client.UnregisterDisconnectHandler(self.setup_connection)
         self.client.Dispatcher.disconnect()
 
         self.poll_notifier.stop()
