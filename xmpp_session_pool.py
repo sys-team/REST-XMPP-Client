@@ -12,7 +12,7 @@ import time
 import operator
 import urllib
 import urllib2
-from urllib2 import URLError
+from urllib2 import URLError, HTTPError
 import json
 from multiprocessing import Process
 
@@ -238,8 +238,8 @@ class XMPPPushNotification(threading.Thread):
     def send_notification(self,post_data):
         try:
             urllib2.urlopen('https://apns-aws.unact.ru/im-dev',data=post_data)
-        except URLError:
-            logging.error('%s : PushEvent :Push service response error',time.ctime())
+        except URLError, HTTPError:
+            logging.debug('%s : PushEvent :Push service response error',time.ctime())
             #self.notifications.append(notification)
 
     def stop(self):
@@ -316,7 +316,7 @@ class XMPPSession():
         self.password=password
         self.server = server
         self.client = XMPPSecureClient(self.jid.getDomain(),debug = [])
-        self.client.RegisterDisconnectHandler(self.client.reconnectAndReauth)
+        self.client.RegisterDisconnectHandler(self.setup_connection)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.messages_store = XMPPMessagesStore()
         self.push_notifier = None
@@ -389,6 +389,7 @@ class XMPPSession():
         
     def setup_connection(self):         
         if not self.client.isConnected():
+            logging.debug('Setup connection')
             con = self.client.connect(server=self.server_tuple())
 
             if not self.client.isConnected() or con is None:

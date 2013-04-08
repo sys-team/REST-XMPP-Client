@@ -171,11 +171,8 @@ def session(xmpp_pool,session_id=None):
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
 
-    try:
-        response['messages'] = session.messages(timestamp=offset)
-        session.reset_new_messages_counter()
-    except TypeError:
-        raise_contact_error(contact_id,response)
+    response['messages'] = session.messages(timestamp=offset)
+    session.reset_new_messages_counter()
 
     return response
     
@@ -193,6 +190,24 @@ def session_contacts(xmpp_pool,session_id=None):
 
     response['contacts'] = session.contacts(timestamp=offset)
         
+    return response
+
+@app.route('/sessions/<session_id>/feed')
+def session_feed(xmpp_pool,session_id=None):
+    """
+        Returns both - messages and contacts
+        Request parameters:
+            offset - returns objects which has been changed  or added since offset
+    """
+    response = {}
+    offset = get_offset(request,response)
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
+
+    response['contacts'] = session.contacts(timestamp=offset)
+    response['messages'] = session.messages(timestamp=offset)
+    session.reset_new_messages_counter()
+
     return response
     
 @app.route('/sessions/<session_id>/contacts/<contact_id>')
