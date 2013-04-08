@@ -35,6 +35,8 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             if item.getAttr('subscription')=='remove':
                 if self._data.has_key(item_id): del self._data[item_id]
                 raise xmpp.protocol.NodeProcessed             # a MUST
+            if item.getAttr('subscription')=='none': # ignore contacts without any subscriptions
+                continue
             self.DEBUG('Setting roster item %s...'%item_id,'ok')
             if not self._data.has_key(item_id): self._data[item_id]={}
             roster_item = self._data[item_id]
@@ -55,6 +57,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 roster_item['groups'].append(group.getData())
             #self._data[self._owner.User+'@'+self._owner.Server]={'resources':{},'name':None,'ask':None,'subscription':None,'groups':None,}
         self.set=1
+
         raise xmpp.protocol.NodeProcessed   # a MUST. Otherwise you'll get back an <iq type='error'/>
 
     def PresenceHandler(self,dis,pres):
