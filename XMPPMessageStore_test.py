@@ -1,4 +1,5 @@
-__author__ = 'kovtash'
+# -*- coding: utf-8 -*-
+__author__ = 'v.kovtash@gmail.com'
 
 from xmpp_session_pool import XMPPMessagesStore
 

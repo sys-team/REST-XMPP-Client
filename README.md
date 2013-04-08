@@ -3,57 +3,72 @@ REST-XMPP-Client
 
 HTTP-шлюз для работы с серверами xmpp
 
-WEB-api
+Messaging-api
 =========
 #### Начало сесии 
-- GET `http://server.name/auth/?jid=(user_jid)&password=(password)&server=(server)`
+- POST `/start-session`
+- - Параметры:
+- - - jid
+- - - password
+- - - server
+- - - push_token (опционально)
 Ответ:
 ```
 {"session": 
-  {"session_id": "some_session_id"}
+  {"session_id": "some_session_id","jid":"some_jid","token":"access-token"}
 }
 ```
 
-#### Информация о сессии
-- GET `http://server.name/sessions/some_sesion_id`
+## Авторизация запросов
+Все запросы, кроме `/start-session` должны содержать хедэр `Authorization` со значением `Bearer access-token`.
 
-#### Чаты сессии
-- GET `http://server.name/sessions/some_sesion_id/chats`
+`access-token` - токен, полученный в ответ на `/start-session`.
 
-#### Список контактов
-- GET `http://server.name/sessions/some_sesion_id/contacts`
+## Сессиия
+- GET `/sessions/<session_id>` - информация о сессии
+- DELETE `/sessions/some_sesion_id` или GET `/sessions/some_sesion_id/delete` - завершение сессии
 
-#### Информация о контакте
-- GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id`
+#### Оповещение
+- GET `/sessions/<session_id>/notification` - long polling запрос об изменениях, в случае наличия измений возвращает статус код 200
 
-#### Чат контакта
-- GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id/chat`
+#### Сообщения
+- GET `/sessions/<session_id>/messages` - все сообщения всех контактов сессии
+- - Параметры:
+- - - offset (опциональен) - возвращает все сообщения, timestap которых больше offset
 
-#### Добавления контакта
-- GET `http://server.name/sessions/some_sesion_id/contacts?jid=some_jid`
+#### Контакты
+- GET `/sessions/<session_id>/contacts` - информация о контактах сессии
+- - Параметры:
+- - - offset (опциональен) - возвращает все контакты, timestap изменения которых больше offset
 
-#### Удаление контакта
-- GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id/delete`
-- DELETE `http://server.name/sessions/some_sesion_id/contacts/some_contact_id`
+#### Лента
+- GET `/sessions/<session_id>/feed` - информация о контактах сессии и сообщения сессии
+- - Параметры:
+- - - offset (опциональен) - возвращает все контакты, timestap изменения которых больше offset и все сообщения, timestap которых больше offset
 
-#### Авторизация контакта
-- GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id/authorize`
+## Контакт
+- GET `/sessions/<session_id>/contacts/<contact_id>` - информация о контакте
+- DELETE `/sessions/<session_id>/contacts/<contact_id>` или `/sessions/<session_id>/contacts/<contact_id>/delete` - удаление контакта
+- GET `/sessions/<session_id>/contacts/<contact_id>/authorize` - авторизация контакта
 
-#### Отправка сообщения
-- Через сессию по jid - GET `http://server.name/sessions/some_sesion_id/messages?jid=some_jid&message=some_message_text`
-- Через сессию по contact_id GET `http://server.name/sessions/some_sesion_id/messages?contact_id=contact_id&message=some_message_text`
-- Через контакт - GET `http://server.name/sessions/some_sesion_id/contacts/some_contact_id/messages?message=some_message_text`
+#### Сообщения
+- GET `/sessions/<session_id>/contacts/<contact_id>/messages` - сообщения контакта
+- - Параметры:
+- - - offset (опциональен) - возвращает все сообщения, timestap которых больше offset
+- POST `/sessions/<session_id>/contacts/<contact_id>/messages`
+- - Тело: ``` {'messages':{'text':'message_text'}}```
+- - content-type = application/json
 
-#### Завершение сессии
-- GET `http://server.name/sessions/some_sesion_id/delete`
-- DELETE `http://server.name/sessions/some_sesion_id`
 
-Коды ошибок
+Statistics-api
 =========
-- 404 - Запрашиваемый ресурс не существует
-- 400 - Не указаны обязательные параметры
-- 502 - Ошибки xmpp соединения
+- GET `/server-status` - статистика количества открытых сессий, и занимаемой приложением памяти
 
-Установка
+
+Error codes
 =========
-Шлюз оформлен в виде приложения для heroku, но может быть запущен и на любом другом сервере.
+- 400
+- 401
+- 404
+- 500
+- 502
