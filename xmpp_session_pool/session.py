@@ -22,7 +22,7 @@ class XMPPSession():
         self.password=password
         self.server = server
         self.client = XMPPSecureClient(self.jid.getDomain(),debug = [])
-        self.client.RegisterDisconnectHandler(self.setup_connection)
+        self.client.RegisterDisconnectHandler(self.reconnect)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.messages_store = XMPPMessagesStore()
         self.push_notifier = None
@@ -35,7 +35,7 @@ class XMPPSession():
 
     def clean(self):
         logging.debug('%s: SessionEvent : Session %s start cleaning', time.ctime(),self.jid)
-        self.client.UnregisterDisconnectHandler(self.setup_connection)
+        self.client.UnregisterDisconnectHandler(self.reconnect)
         self.client.Dispatcher.disconnect()
 
         self.poll_notifier.stop()
@@ -108,7 +108,9 @@ class XMPPSession():
             self.register_handlers()
             self.client.sendInitPresence()
             self.client.getRoster()
-            self.client.Dispatcher.Process(5)
+
+    def reconnect(self):
+        self.client.reconnectAndReauth()
 
     def reset_new_messages_counter(self):
         self.new_messages_count = 0
