@@ -110,6 +110,7 @@ class XMPPSession():
             self.client.getRoster()
 
     def reconnect(self):
+        logging.debug('Reconnect')
         self.client.reconnectAndReauth()
 
     def reset_new_messages_counter(self):
