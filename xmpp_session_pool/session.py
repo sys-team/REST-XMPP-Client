@@ -95,7 +95,7 @@ class XMPPSession():
 
     def setup_connection(self):
         if not self.client.isConnected():
-            logging.debug('Setup connection')
+            logging.debug('%s: SessionEvent : Session %s Setup connection',time.ctime(),self.jid)
             con = self.client.connect(server=self.server_tuple())
 
             if not self.client.isConnected() or con is None:
@@ -110,7 +110,7 @@ class XMPPSession():
             self.client.getRoster()
 
     def reconnect(self):
-        logging.debug('Reconnect')
+        logging.debug('%s: SessionEvent : Session %s Reconnect',time.ctime(),self.jid)
         self.client.reconnectAndReauth()
 
     def reset_new_messages_counter(self):
