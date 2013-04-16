@@ -126,7 +126,7 @@ class XMPPSession():
     def sendByJID(self,jid,message):
         self.setup_connection()
         if self.client.isConnected():
-            id = self.client.send(xmpp.protocol.Message(jid,message))
+            id = self.client.send(xmpp.protocol.Message(to=jid,body=message,typ='chat'))
             if not id:
                 raise XMPPSendError()
 
