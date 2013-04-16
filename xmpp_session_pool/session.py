@@ -110,8 +110,11 @@ class XMPPSession():
             self.client.getRoster()
 
     def reconnect(self):
-        logging.debug('%s: SessionEvent : Session %s Reconnect',time.ctime(),self.jid)
-        self.client.reconnectAndReauth()
+        while not self.client.isConnected():
+            logging.debug('%s: SessionEvent : Session %s Reconnect',time.ctime(),self.jid)
+            self.client.reconnectAndReauth()
+        self.client.sendInitPresence()
+        self.client.getRoster()
 
     def reset_new_messages_counter(self):
         self.new_messages_count = 0
