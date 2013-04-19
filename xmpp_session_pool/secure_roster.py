@@ -42,7 +42,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             roster_item = self._data[item_id]
             roster_item['id']=item_id
             roster_item['jid']=jid
-            if roster_item.has_key('name'):
+            if item.getAttr('name') is not None:
                 roster_item['name']=item.getAttr('name')
             else:
                 roster_item['name']=jid
@@ -75,7 +75,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             self.DEBUG('Presence from own clients')
             return
 
-        if not self._data.has_key(item_id): self._data[item_id]={'jid':jid.getStripped(),'name':None,'ask':None,'subscription':'none','groups':['Not in roster'],'priority':self.default_priority}
+        if not self._data.has_key(item_id): self._data[item_id]={'jid':jid.getStripped(),'name':jid.getStripped(),'ask':None,'subscription':'none','groups':['Not in roster'],'priority':self.default_priority}
         if not self._resources.has_key(item_id): self._resources[item_id] = {}
 
         item=self._data[item_id]
