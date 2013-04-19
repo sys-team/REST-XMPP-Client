@@ -30,6 +30,3 @@ class XMPPSessionPool():
     def clean(self):
         for session_key in self.session_pool.keys():
             self.close_session(session_key)
-
-    def __del__(self):
-        self.clean()

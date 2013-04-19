@@ -42,7 +42,10 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             roster_item = self._data[item_id]
             roster_item['id']=item_id
             roster_item['jid']=jid
-            roster_item['name']=item.getAttr('name')
+            if roster_item.has_key('name'):
+                roster_item['name']=item.getAttr('name')
+            else:
+                roster_item['name']=jid
             roster_item['ask']=item.getAttr('ask')
             roster_item['subscription']=item.getAttr('subscription')
             roster_item['timestamp']=time.time()
@@ -98,7 +101,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
 
             if pres.getTag('nick'):
                 res['nick']=pres.getTagData('nick')
-                if item['name'] is None and res['nick'] is not None:
+                if res['nick'] is not None:
                     item['name'] = res['nick']
 
 
@@ -109,6 +112,8 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 item['priority'] = res['priority']
                 item['show'] = res['show']
                 item['status'] = res['status']
+                if res['nick'] is not None:
+                    item['name'] = res['nick']
             else:
                 item['priority'] = self.default_priority
                 item['show'] = 'offline'

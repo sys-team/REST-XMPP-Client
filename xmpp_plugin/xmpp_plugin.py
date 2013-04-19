@@ -44,6 +44,3 @@ class XMPPPlugin(object):
 
     def close(self):
         self.session_pool.clean()
-
-    def __del__(self):
-        self.close()
