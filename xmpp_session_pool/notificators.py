@@ -55,7 +55,7 @@ class XMPPPushNotification(threading.Thread):
         while self.keepRunning:
             self.notification_lock.acquire()
             for i in xrange(len(self.notifications)):
-                notification = self.notifications.pop()
+                notification = self.notifications.pop(0)
                 post_data = urllib.urlencode({'token':self.push_token,'message':json.dumps(notification)})
                 p = Process(target=self.send_notification, args=(post_data,))
                 p.start()
@@ -74,7 +74,6 @@ class XMPPPushNotification(threading.Thread):
         self.notification_lock.release()
 
     def notify(self,message=None,unread_count=None):
-        self.notification_lock.acquire(False)
         notification = {'aps':{'sound':'chime'}}
         if  message is not None:
             if len(message) > 100:
@@ -83,5 +82,7 @@ class XMPPPushNotification(threading.Thread):
 
         if unread_count is not None:
             notification['aps']['badge']=unread_count
+
+        self.notification_lock.acquire(False)
         self.notifications.append(notification)
         self.notification_lock.release()
