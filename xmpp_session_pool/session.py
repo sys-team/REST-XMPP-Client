@@ -11,11 +11,13 @@ from secure_client import XMPPSecureClient
 from message_store import XMPPMessagesStore
 from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSendError
 
-from  notificators import XMPPPollNotification, XMPPPushNotification
+from  notificators import XMPPPollNotification
 
 class XMPPSession():
-    def __init__(self,jid,password,server=None,push_token=None):
+    def __init__(self,jid,password,server=None,push_token=None,push_sender=None):
         self.token = uuid.uuid4().hex
+        self.push_sender = push_sender
+        self.push_token = push_token
         self.jid = xmpp.protocol.JID(jid)
         if  server is None:
             server = self.jid.getDomain()
@@ -25,9 +27,6 @@ class XMPPSession():
         self.client.RegisterDisconnectHandler(self.reconnect)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.messages_store = XMPPMessagesStore()
-        self.push_notifier = None
-        if push_token is not None:
-            self.push_notifier = XMPPPushNotification(push_token)
         self.poll_notifier = XMPPPollNotification()
         self.new_messages_count = 0
 
@@ -39,9 +38,6 @@ class XMPPSession():
         self.client.Dispatcher.disconnect()
 
         self.poll_notifier.stop()
-        if self.push_notifier is not None:
-            self.push_notifier.stop()
-            self.push_notifier.join(0)
 
         if 'TCPsocket' in self.client.__dict__:
             sock = self.client.__dict__['TCPsocket']
@@ -88,10 +84,10 @@ class XMPPSession():
             self.messages_store.append_message(jid=contact_id,inbound=True,id=event.getID(),text=message_text)
             self.new_messages_count+=1
             self.poll_notifier.notify()
-            if self.push_notifier is not None:
+            if self.push_sender is not None:
                 contact = self.client.getRoster().getItem(contact_id)
                 message = ''.join([contact['name'],': \n',message_text])
-                self.push_notifier.notify(message=message,unread_count=self.new_messages_count)
+                self.push_sender.notify(token=self.push_token,message=message,unread_count=self.new_messages_count)
 
     def setup_connection(self):
         if not self.client.isConnected():
