@@ -10,6 +10,6 @@ dev_mode = True
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    app = make_app(dev_mode=dev_mode)
+    app = make_app(dev_mode=dev_mode,push_notification_sender='apnwsgi')
     app.run(host=host, port=port, server='cherrypy') #reloader=True
     app.close()

@@ -10,8 +10,46 @@ import threading
 from multiprocessing import Process
 import os.path
 import pyapns_client
+import struct
+import binascii
 
-class APNWSGINotification(threading.Thread):
+class NotificationAbstract():
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+    def notify(self,token=None,message=None,unread_count=None,max_message_len=100,message_cut_end='...'):
+        aps_message = {'aps':{'sound':'chime','alert':''}}
+        if unread_count is not None:
+            aps_message['aps']['badge']=unread_count
+
+        payload = json.dumps(aps_message,separators=(',',':'), ensure_ascii=False).encode('utf-8')
+        max_payload_len = 250 - len(payload)
+
+        if  message is not None and token is not None:
+            if  len(message) > max_message_len:
+                message = message[:max_message_len] + message_cut_end
+
+            if len(message.encode('utf-8')) > max_payload_len:
+                new_message_len = max_payload_len - len(message_cut_end)
+                while len(message.encode('utf-8')) > new_message_len:
+                    message = message[:-1]
+
+                message = message + message_cut_end
+
+            aps_message['aps']['alert']=message
+        else:
+            return
+
+        self.perform_notification(token,aps_message)
+
+    def perform_notification(self,token,aps_message):
+        pass
+
+
+class APNWSGINotification(threading.Thread, NotificationAbstract):
     def __init__(self,host,app_id):
         if  host is None or app_id is None:
             raise ValueError
@@ -44,23 +82,13 @@ class APNWSGINotification(threading.Thread):
         with self.notifications_available:
             self.notifications_available.notify_all()
 
-    def notify(self,token=None,message=None,unread_count=None):
-        aps_message = {'aps':{'sound':'chime'}}
-        if  message is not None and token is not None:
-            if len(message) > 100:
-                message = message[:97]+'...'
-            aps_message['aps']['alert']=message
-        else:
-            return
-
-        if unread_count is not None:
-            aps_message['aps']['badge']=unread_count
-
+    def perform_notification(self,token,aps_message):
         self.notifications.append({'token':token,'message':json.dumps(aps_message)})
         with self.notifications_available:
             self.notifications_available.notify_all()
 
-class PyAPNSNotification():
+
+class PyAPNSNotification(NotificationAbstract):
     def __init__(self,host,app_id,cert_file,dev_mode=False):
         pyapns_client.configure({'HOST': host})
         self.app_id = app_id
@@ -75,19 +103,5 @@ class PyAPNSNotification():
 
         pyapns_client.provision(self.app_id,open(self.cert_file).read(), mode)
 
-    def stop(self):
-        pass
-
-    def notify(self,token=None,message=None,unread_count=None):
-        aps_message = {'aps':{'sound':'chime'}}
-        if  message is not None and token is not None:
-            if len(message) > 100:
-                message = message[:97]+'...'
-            aps_message['aps']['alert']=message
-        else:
-            return
-
-        if unread_count is not None:
-            aps_message['aps']['badge']=unread_count
-
+    def perform_notification(self,token,aps_message):
         pyapns_client.notify(self.app_id,token,aps_message,async=True)

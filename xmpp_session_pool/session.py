@@ -86,7 +86,7 @@ class XMPPSession():
             self.poll_notifier.notify()
             if self.push_sender is not None:
                 contact = self.client.getRoster().getItem(contact_id)
-                message = ''.join([contact['name'],': \n',message_text])
+                message = ''.join([contact['name'],': ',message_text])
                 self.push_sender.notify(token=self.push_token,message=message,unread_count=self.new_messages_count)
 
     def setup_connection(self):
