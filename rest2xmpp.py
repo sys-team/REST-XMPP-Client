@@ -4,24 +4,10 @@ __author__ = 'v.kovtash@gmail.com'
 import resource
 import json
 from bottle import Bottle, template, request, abort, response
-from xmpp_plugin import XMPPPlugin, XMPPAuthError, XMPPConnectionError, XMPPSendError, PyAPNSNotification, APNWSGINotification
-import inspect
-import os
-
-push_app_id = 'im'
-push_dev_mode = True
-
-if push_dev_mode:
-    push_app_id = push_app_id+'-dev'
-
-current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-cert_file = os.path.join(current_dir,'certificates',push_app_id+'.pem')
-
-apnwsgi_notification_sender = APNWSGINotification(host='https://apns-aws.unact.ru',app_id=push_app_id)
-pyapns_notification_sender = PyAPNSNotification(host='https://pyapns.unact.ru/',app_id=push_app_id,cert_file=cert_file,dev_mode=push_dev_mode)
+from xmpp_plugin import XMPPPlugin, XMPPAuthError, XMPPConnectionError, XMPPSendError
 
 app = Bottle(catchall=True)
-app.install(XMPPPlugin(debug=False,push_sender=pyapns_notification_sender))
+app.install(XMPPPlugin(debug=False,push_sender=None))
 
 def raise_message_sending_error(response):
     response['error'] = {'code':'XMPPSendError','text':'Message sending failed'}

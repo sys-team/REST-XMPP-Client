@@ -4,9 +4,9 @@ __author__ = 'v.kovtash@gmail.com'
 import logging
 from app_builder import make_app
 
-port = 5000
+port = 6000
 host = '0.0.0.0'
-dev_mode = False
+dev_mode = True
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

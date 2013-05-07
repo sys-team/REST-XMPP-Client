@@ -9,7 +9,8 @@ class XMPPSessionPool():
         self.session_pool = {}
         self.debug = debug
         self.push_sender = push_sender
-        self.push_sender.start()
+        if self.push_sender is not None:
+            self.push_sender.start()
 
     def start_session(self,jid,password,server=None,push_token=None):
         if  self.debug:
@@ -32,4 +33,5 @@ class XMPPSessionPool():
     def clean(self):
         for session_key in self.session_pool.keys():
             self.close_session(session_key)
-        self.push_sender.stop()
+        if self.push_sender is not None:
+            self.push_sender.stop()
