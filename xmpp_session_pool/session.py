@@ -195,8 +195,10 @@ class XMPPSessionThread(threading.Thread):
 
     def run(self):
         while self.keepRunning:
-            self.session.client.Process(1)
-            #time.sleep(1)
+            try:
+                self.session.client.Process(1)
+            except xmpp.protocol.StreamError:
+                self.session.client.Dispatcher.disconnect()
 
         self.session.clean()
 
