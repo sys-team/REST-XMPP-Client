@@ -10,8 +10,6 @@ import threading
 from multiprocessing import Process
 import os.path
 import pyapns_client
-import struct
-import binascii
 
 class NotificationAbstract():
     def start(self):
@@ -20,26 +18,50 @@ class NotificationAbstract():
     def stop(self):
         pass
 
-    def notify(self,token=None,message=None,unread_count=None,max_message_len=100,message_cut_end='...'):
-        aps_message = {'aps':{'sound':'chime','alert':''}}
+    def notify(self,token=None,message=None,unread_count=None,max_message_len=100,message_cut_end='...',contact_name=None,contact_id=None,sound=True):
+
+        full_message = None
+        if  message is not None or contact_name is not None:
+            full_message = ''
+            if contact_name is not None:
+                full_message = full_message.join([contact_name])
+
+                if  message is not None:
+                   full_message = full_message.join([': '])
+
+            if  message is not None:
+                full_message = full_message.join([message])
+
+        aps_message = {'aps':{}}
+
+        if  sound:
+            aps_message['aps']['sound'] = 'chime'
+
+        if  full_message is not None:
+            aps_message['aps']['alert']=''
+
         if unread_count is not None:
             aps_message['aps']['badge']=unread_count
+
+        if contact_id is not None:
+            aps_message['im']={}
+            aps_message['im']['contact_id']=contact_id
 
         payload = json.dumps(aps_message,separators=(',',':'), ensure_ascii=False).encode('utf-8')
         max_payload_len = 250 - len(payload)
 
-        if  message is not None and token is not None:
-            if  len(message) > max_message_len:
-                message = message[:max_message_len] + message_cut_end
+        if  full_message is not None and token is not None:
+            if  len(full_message) > max_message_len:
+                full_message = full_message[:max_message_len] + message_cut_end
 
-            if len(message.encode('utf-8')) > max_payload_len:
+            if len(full_message.encode('utf-8')) > max_payload_len:
                 new_message_len = max_payload_len - len(message_cut_end)
-                while len(message.encode('utf-8')) > new_message_len:
-                    message = message[:-1]
+                while len(full_message.encode('utf-8')) > new_message_len:
+                    full_message = full_message[:-1]
 
-                message = message + message_cut_end
+                full_message = full_message + message_cut_end
 
-            aps_message['aps']['alert']=message
+            aps_message['aps']['alert']=full_message
         else:
             return
 
