@@ -33,7 +33,7 @@ class XMPPSession():
         self.setup_connection()
 
     def clean(self):
-        self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=1)
+        self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=0)
         logging.debug('%s: SessionEvent : Session %s start cleaning', time.ctime(),self.jid)
         self.client.UnregisterDisconnectHandler(self.reconnect)
         self.client.Dispatcher.disconnect()

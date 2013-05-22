@@ -24,7 +24,7 @@ class XMPPSessionPool():
     def close_session(self,session_id):
         session = self.session_pool[session_id]
         session.stop()
-        session.join(0)
+        session.join(60)
         del self.session_pool[session_id]
 
     def session_for_id(self,session_id):
