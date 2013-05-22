@@ -4,6 +4,7 @@ __author__ = 'v.kovtash@gmail.com'
 import logging
 from app_builder import make_app
 import signal
+import sys
 
 port = 6000
 host = '0.0.0.0'
@@ -17,6 +18,7 @@ if __name__ == '__main__':
         logging.info('Application termination started')
         app.close()
         logging.info('Application terminated')
+        sys.exit(0)
 
     signal.signal(signal.SIGTERM, term_handler)
 
