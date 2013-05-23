@@ -34,7 +34,7 @@ class XMPPSession():
 
     def clean(self):
         self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=0)
-        logging.debug('%s: SessionEvent : Session %s start cleaning', time.ctime(),self.jid)
+        logging.debug('SessionEvent : Session %s start cleaning',self.jid)
         self.client.UnregisterDisconnectHandler(self.reconnect)
         self.client.Dispatcher.disconnect()
 
@@ -45,11 +45,11 @@ class XMPPSession():
             try:
                 sock._sock.shutdown(socket.SHUT_RDWR)
             except:
-                logging.debug('%s: SessionEvent : Session %s socket shutdowned', time.ctime(), self.jid)
+                logging.debug('SessionEvent : Session %s socket shutdowned', self.jid)
             sock._sock.close()
             sock.PlugOut()
 
-        logging.debug('%s: SessionEvent : Session %s cleaning done',time.ctime(), self.jid)
+        logging.debug('SessionEvent : Session %s cleaning done', self.jid)
 
     def server_tuple(self):
         server_port = self.server.split(':')
@@ -68,9 +68,9 @@ class XMPPSession():
 
     def debugging_handler(self, con, event):
         try:
-            logging.debug('%s : XMPPEvent : %s',time.ctime(),event)
+            logging.debug('XMPPEvent : %s',event)
         except UnicodeEncodeError:
-            logging.debug('%s : XMPPEvent : UnicodeEncodeError Exception',time.ctime())
+            logging.debug('XMPPEvent : UnicodeEncodeError Exception')
 
     def xmpp_presence(self, con, event):
         self.poll_notifier.notify()
@@ -91,7 +91,7 @@ class XMPPSession():
 
     def setup_connection(self):
         if not self.client.isConnected():
-            logging.debug('%s: SessionEvent : Session %s Setup connection',time.ctime(),self.jid)
+            logging.debug('SessionEvent : Session %s Setup connection',self.jid)
             con = self.client.connect(server=self.server_tuple())
 
             if not self.client.isConnected() or con is None:
@@ -107,7 +107,7 @@ class XMPPSession():
 
     def reconnect(self):
         while not self.client.isConnected():
-            logging.debug('%s: SessionEvent : Session %s Reconnect',time.ctime(),self.jid)
+            logging.debug('SessionEvent : Session %s Reconnect',self.jid)
             self.client.reconnectAndReauth()
         self.client.sendInitPresence()
         self.client.getRoster()

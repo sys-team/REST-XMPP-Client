@@ -2,6 +2,7 @@ __author__ = 'v.kovtash@gmail.com'
 
 from app_builder import make_app
 import logging
+import logging.handlers
 import signal
 import sys
 
@@ -16,6 +17,8 @@ def arguments():
     parser.add_argument('--log-level', action='store', default='info', nargs='?',
         choices=['info','warning','error','debug'],
         help='Logging verbosity level.')
+    parser.add_argument('--log-file', action='store', nargs='?',
+        help='Log file path.')
     push_settings_group = parser.add_argument_group('Push server settings')
     push_settings_group.add_argument('--push-mechanism', action='store', nargs='?',
         choices=['apnwsgi', 'pyapns'],
@@ -38,21 +41,23 @@ def arguments():
 
     return arguments
 
-def set_logging_level(logging_level):
-    if logging_level == 'warning':
-        logging.basicConfig(level=logging.WARNING)
-    elif logging_level == 'error':
-        logging.basicConfig(level=logging.ERROR)
-    elif logging_level == 'debug':
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+def set_logging_config(logging_level_string = 'info',
+                       logging_format = '%(asctime)s %(levelname)s %(message)s',
+                       log_file = None):
+    formatter = logging.Formatter(logging_format)
+    level = getattr(logging, logging_level_string.upper(), logging.INFO)
+    logging.basicConfig(format=logging_format,level=level)
+    root_logger = logging.getLogger('')
 
+    if  log_file is not None:
+        file_handler = logging.handlers.TimedRotatingFileHandler(log_file, when='midnight', interval=1, backupCount=7)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
 
 def main():
     args = arguments()
-    print(args)
-    set_logging_level(args.log_level)
+    set_logging_config(logging_level_string = args.log_level,log_file = args.log_file)
 
     app = make_app(push_dev_mode=args.push_dev_mode,
         push_notification_sender=args.push_mechanism,
@@ -61,14 +66,15 @@ def main():
         push_cert_dir=args.push_cert_dir)
 
     def term_handler(signum = None, frame = None):
-        logging.info('Application termination started')
+        logging.info('Server cleanup started')
         app.close()
-        logging.info('Application terminated')
+        logging.info('Server shuts down')
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, term_handler)
     signal.signal(signal.SIGINT, term_handler)
 
+    logging.info('Starting server at address %s:%s',args.address,args.port)
     app.run(host=args.address, port=args.port, server='cherrypy')
 
 
