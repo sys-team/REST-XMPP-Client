@@ -220,6 +220,31 @@ def session_contact(xmpp_pool,session_id=None,contact_id=None):
 
     return response
 
+@app.put('/sessions/<session_id>/contacts/<contact_id>')
+def session_contact_update(xmpp_pool,session_id=None,contact_id=None):
+    response = {}
+
+    if request.json is None or 'contact' not in request.json:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+        abort(400, response)
+
+    contact = request.json['contact']
+
+    check_session_id(session_id,response)
+    check_contact_id(contact_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
+
+    try:
+        if 'name' in contact:
+            session.update_contact(contact_id,name=contact['name'])
+
+        response['contacts'] = [session.contact(contact_id)]
+    except KeyError:
+        raise_contact_error(contact_id,response)
+
+    return response
+
+
 @app.route('/sessions/<session_id>/contacts/<contact_id>/authorize')
 def session_contact_authorize(xmpp_pool,session_id=None,contact_id=None):
     response = {}

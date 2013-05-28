@@ -45,7 +45,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             if item.getAttr('name') is not None:
                 roster_item['name']=item.getAttr('name')
             else:
-                roster_item['name']=jid
+                roster_item['name'] = None
             roster_item['ask']=item.getAttr('ask')
             roster_item['subscription']=item.getAttr('subscription')
             roster_item['timestamp']=time.time()
@@ -93,17 +93,16 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 res['show']=pres.getShow()
             if pres.getTag('status'):
                 res['status']=pres.getStatus()
+            if pres.getTag('nick'):
+                res['nick']=pres.getTagData('nick')
 
             if res['priority'] >= item['priority']:
                 item['priority'] = res['priority']
                 item['show'] = res['show']
                 item['status'] = res['status']
 
-            if pres.getTag('nick'):
-                res['nick']=pres.getTagData('nick')
-                if res['nick'] is not None:
-                    item['name'] = res['nick']
-
+            if res['nick'] is not None and item['name'] is None:
+                item['name'] = res['nick']
 
         elif typ=='unavailable' and item_resources.has_key(jid.getResource()):
             del item_resources[jid.getResource()]
@@ -112,7 +111,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 item['priority'] = res['priority']
                 item['show'] = res['show']
                 item['status'] = res['status']
-                if res['nick'] is not None:
+                if res['nick'] is not None and item['name'] is None:
                     item['name'] = res['nick']
             else:
                 item['priority'] = self.default_priority
@@ -148,3 +147,26 @@ class XMPPSecureRoster(xmpp.roster.Roster):
 
     def getItemByJID(self,jid):
         return self.getItem(self.itemId(jid))
+
+    def setItem(self,contact_id,name=None,groups=None):
+        """Renames contact and sets the groups list that it now belongs to."""
+        if not contact_id in self._data:
+            return
+
+        contact = self._data[contact_id]
+        iq=xmpp.protocol.Iq('set',xmpp.protocol.NS_ROSTER)
+        query=iq.getTag('query')
+        attrs={'jid':contact['jid']}
+        if name:
+            attrs['name']=name
+            contact['name'] = name
+        item=query.setTag('item',attrs)
+
+        if groups is None:
+            groups = contact['groups']
+        else:
+            contact['groups'] = groups
+
+        for group in groups:
+            item.addChild(node=xmpp.protocol.Node('group',payload=[group]))
+        self._owner.send(iq)

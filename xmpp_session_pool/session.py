@@ -4,7 +4,6 @@ __author__ = 'v.kovtash@gmail.com'
 import uuid
 import xmpp
 import logging
-import time
 import socket
 import threading
 from secure_client import XMPPSecureClient
@@ -32,8 +31,9 @@ class XMPPSession():
 
         self.setup_connection()
 
-    def clean(self):
-        self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=0)
+    def clean(self,with_notification=True):
+        if   with_notification:
+            self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=0)
         logging.debug('SessionEvent : Session %s start cleaning',self.jid)
         self.client.UnregisterDisconnectHandler(self.reconnect)
         self.client.Dispatcher.disconnect()
@@ -63,6 +63,7 @@ class XMPPSession():
 
     def register_handlers(self):
         self.client.Dispatcher.RegisterHandler('presence',self.xmpp_presence)
+        self.client.Dispatcher.RegisterHandler('iq',self.xmpp_presence)
         self.client.Dispatcher.RegisterHandler('message',self.xmpp_message)
         self.client.Dispatcher.RegisterDefaultHandler(self.debugging_handler)
 
@@ -154,6 +155,10 @@ class XMPPSession():
         else:
             raise XMPPRosterError()
 
+    def update_contact(self,contact_id,name=None,groups=None):
+        if self.client.isConnected():
+            self.client.getRoster().setItem(contact_id,name=name,groups=groups)
+
     def contactByJID(self,jid):
         if self.client.isConnected():
             return self.client.getRoster().getItemByJID(jid)
@@ -192,6 +197,7 @@ class XMPPSessionThread(threading.Thread):
         super(XMPPSessionThread, self).__init__()
         self.session = session
         self.keepRunning = True
+        self.with_notification = True
 
     def run(self):
         while self.keepRunning:
@@ -200,7 +206,8 @@ class XMPPSessionThread(threading.Thread):
             except xmpp.protocol.StreamError:
                 self.session.client.Dispatcher.disconnect()
 
-        self.session.clean()
+        self.session.clean(with_notification=self.with_notification)
 
-    def stop(self):
+    def stop(self,with_notification=True):
+        self.with_notification = with_notification
         self.keepRunning = False

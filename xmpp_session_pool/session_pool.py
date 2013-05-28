@@ -21,9 +21,9 @@ class XMPPSessionPool():
         self.session_pool[session_id].start()
         return session_id
 
-    def close_session(self,session_id):
+    def close_session(self,session_id,with_notification=False):
         session = self.session_pool[session_id]
-        session.stop()
+        session.stop(with_notification)
         session.join(60)
         del self.session_pool[session_id]
 
@@ -32,6 +32,6 @@ class XMPPSessionPool():
 
     def clean(self):
         for session_key in self.session_pool.keys():
-            self.close_session(session_key)
+            self.close_session(session_key,with_notification=True)
         if self.push_sender is not None:
             self.push_sender.stop()
