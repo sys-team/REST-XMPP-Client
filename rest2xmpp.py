@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 __author__ = 'v.kovtash@gmail.com'
 
-import resource
 import json
 from bottle import Bottle, template, request, abort, response
 from xmpp_plugin import XMPPPlugin, XMPPAuthError, XMPPConnectionError, XMPPSendError
+import psutil
+import os
 
 app = Bottle(catchall=True)
 app.install(XMPPPlugin(debug=False,push_sender=None))
@@ -307,24 +308,18 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 
 @app.route('/server-status')
 def server_status(xmpp_pool):
+    def sizeof_fmt(num):
+        for x in ['B','kB','MB','GB']:
+            if num < 1024.0:
+                return {'value':num, 'units':x}
+            num /= 1024.0
+        return {'value':num, 'units':'TB'}
+
     response = {}
-    response['memory'] = {}
+    process = psutil.Process(os.getpid())
 
-    memory_value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-
-    if 1024 < memory_value < 1024*1024:
-        response['memory']['value'] = memory_value / float(1024)
-        response['memory']['units'] = 'kB'
-    elif 1024*1024 < memory_value < 1024*1024*1024:
-        response['memory']['value'] = memory_value / float(1024*1024)
-        response['memory']['units'] = 'MB'
-    elif 1024*1024*1024 < memory_value < 1024*1024*1024*1024:
-        response['memory']['value'] = memory_value / float(1024*1024*1024)
-        response['memory']['units'] = 'GB'
-    else:
-        response['memory']['value'] = memory_value
-        response['memory']['units'] = 'B'
-
+    response['memory'] = sizeof_fmt(process.get_memory_info()[0])
+    response['threads'] = process.get_num_threads()
     response['sessions'] = len(xmpp_pool.session_pool.keys())
     return response
 
