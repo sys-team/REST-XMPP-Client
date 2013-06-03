@@ -84,11 +84,19 @@ class XMPPSession():
         message_text = event.getBody()
         if  message_text is not None:
             self.messages_store.append_message(jid=contact_id,inbound=True,id=event.getID(),text=message_text)
-            self.new_messages_count+=1
             self.poll_notifier.notify()
             if self.push_sender is not None:
                 contact = self.client.getRoster().getItem(contact_id)
-                self.push_sender.notify(token=self.push_token,message=None,unread_count=self.new_messages_count,contact_name=contact['name'],contact_id=contact_id)
+                self.push_sender.notify(token=self.push_token,message=None,unread_count=self.unread_count(),contact_name=contact['name'],contact_id=contact_id)
+
+    def unread_count(self):
+        unread_count = 0
+        for contact in self.client.getRoster().getRawRoster().values():
+            if (contact['id'] in self.messages_store.chats_store
+                and contact['read_offset'] < self.messages_store.chats_store[contact['id']][-1]['timestamp']):
+                unread_count += 1
+
+        return unread_count
 
     def setup_connection(self):
         if not self.client.isConnected():
@@ -112,9 +120,6 @@ class XMPPSession():
             self.client.reconnectAndReauth()
         self.client.sendInitPresence()
         self.client.getRoster()
-
-    def reset_new_messages_counter(self):
-        self.new_messages_count = 0
 
     def send(self,contact_id,message):
         jid = self.client.getRoster().getItem(contact_id)['jid']
@@ -158,6 +163,11 @@ class XMPPSession():
     def update_contact(self,contact_id,name=None,groups=None):
         if self.client.isConnected():
             self.client.getRoster().setItem(contact_id,name=name,groups=groups)
+
+    def set_contact_read_offset(self,contact_id,read_offset):
+        self.client.getRoster().setItemReadOffset(contact_id,read_offset)
+        self.poll_notifier.notify()
+        self.push_sender.notify(token=self.push_token,unread_count=self.unread_count())
 
     def contactByJID(self,jid):
         if self.client.isConnected():

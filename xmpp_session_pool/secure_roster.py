@@ -38,7 +38,9 @@ class XMPPSecureRoster(xmpp.roster.Roster):
 
     def _get_item_data(self,item_id):
         if item_id not in self._data:
-            self._data[item_id]={'name':None,'ask':None,'subscription':'none','groups':['Not in roster'],
+            self._data[item_id]={'id':item_id,'name':None,'ask':None,'subscription':'none',
+                                 'read_offset':0,
+                                 'groups':['Not in roster'],
                                  'priority':self.default_priority}
         return self._data[item_id]
 
@@ -46,7 +48,6 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         if item_id not in self._internal_data:
             self._internal_data[item_id] = {'name':None,'nick':None,'resources':{}}
         return self._internal_data[item_id]
-
 
     def RosterIqHandler(self,dis,stanza):
         """ Subscription tracker. Used internally for setting items state in
@@ -158,6 +159,16 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                 if int(self._internal_data[item_id]['resources'][r]['priority'])>lastpri: resource,lastpri=r,int(self._internal_data[item_id]['resources'][r]['priority'])
             return self._internal_data[item_id]['resources'][resource][dataname]
 
+    def setItemReadOffset(self,item_id,read_offset):
+        item = self._get_item_data(item_id)
+        if  read_offset > item['read_offset']:
+            item['read_offset'] = read_offset
+            item['timestamp'] = time.time()
+
+    def getItemReadOffset(self,item_id):
+        item = self._get_item_data(item_id)
+        return item['read_offset']
+
     def getRawItem(self,jid):
         """ Returns roster item 'jid' representation in internal format. """
         return self._data[self.itemId(jid[:(jid+'/').find('/')])]
@@ -175,11 +186,15 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             return
 
         contact = self._data[contact_id]
+
+        if  (name is None or name == contact['name']) and groups is None:
+            return
+
         iq=xmpp.protocol.Iq('set',xmpp.protocol.NS_ROSTER)
         query=iq.getTag('query')
         attrs={'jid':contact['jid']}
-        if name:
-            attrs['name']=name
+        if name is not None and name != contact['name']:
+            attrs['name'] = name
             contact['name'] = name
         item=query.setTag('item',attrs)
 

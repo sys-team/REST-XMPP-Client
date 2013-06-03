@@ -167,7 +167,6 @@ def session(xmpp_pool,session_id=None):
     session = get_session(xmpp_pool,session_id,request,response)
 
     response['messages'] = session.messages(timestamp=offset)
-    session.reset_new_messages_counter()
 
     return response
 
@@ -201,7 +200,6 @@ def session_feed(xmpp_pool,session_id=None):
 
     response['contacts'] = session.contacts(timestamp=offset)
     response['messages'] = session.messages(timestamp=offset)
-    session.reset_new_messages_counter()
 
     return response
 
@@ -237,6 +235,8 @@ def session_contact_update(xmpp_pool,session_id=None,contact_id=None):
     try:
         if 'name' in contact:
             session.update_contact(contact_id,name=contact['name'])
+        if 'read_offset' in contact:
+            session.set_contact_read_offset(contact_id,contact['read_offset'])
 
         response['contacts'] = [session.contact(contact_id)]
     except KeyError:
@@ -292,7 +292,6 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
 
     try:
         response['messages'] = session.messages(contact_ids=[contact_id],timestamp=offset)
-        session.reset_new_messages_counter()
     except TypeError:
         raise_contact_error(contact_id,response)
 
