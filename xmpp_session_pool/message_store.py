@@ -9,41 +9,41 @@ class XMPPMessagesStore():
         self.chat_buffer_size = chat_buffer_size
         self.chats_store = {}
 
-    def append_message(self,jid,inbound,id,text):
-        if jid not in self.chats_store:
-            self.chats_store[jid] = []
+    def append_message(self,contact_id,inbound,event_id,text):
+        if contact_id not in self.chats_store:
+            self.chats_store[contact_id] = []
 
         messages = []
 
         for i in xrange(0, len(text), self.max_message_size):
-            messages.append({'id':id,
+            messages.append({'event_id':event_id,
                              'inbound':inbound,
                              'text':text[i:i+self.max_message_size],
                              'timestamp':time.time(),
-                             'contact_id':jid
+                             'contact_id':contact_id
             })
 
         for message in messages:
-            self.chats_store[jid].append(message)
+            self.chats_store[contact_id].append(message)
 
-        if len(self.chats_store[jid]) > self.chat_buffer_size:
-            for i in xrange (0,len(self.chats_store[jid])-self.chat_buffer_size):
-                del self.chats_store[jid][0]
+        if len(self.chats_store[contact_id]) > self.chat_buffer_size:
+            for i in xrange (0,len(self.chats_store[contact_id])-self.chat_buffer_size):
+                del self.chats_store[contact_id][0]
 
         return messages
 
-    def messages(self,jids=None, timestamp=None):
+    def messages(self,contact_ids=None, event_offset=None):
         result = []
-        if jids is None:
+        if contact_ids is None:
             for chat in self.chats_store.values():
                 result+=chat
         else:
             for jid in self.chats_store.iterkeys():
-                if jid in jids:
+                if jid in contact_ids:
                     result += self.chats_store[jid]
 
-        if timestamp is not None:
-            result = filter(lambda message: message['timestamp'] > timestamp,result)
+        if event_offset is not None:
+            result = filter(lambda message: message['event_id'] > event_offset,result)
 
         return result
 

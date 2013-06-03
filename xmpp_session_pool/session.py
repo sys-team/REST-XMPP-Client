@@ -9,11 +9,12 @@ import threading
 from secure_client import XMPPSecureClient
 from message_store import XMPPMessagesStore
 from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSendError
-
+from event_id import XMPPSessionEventID
 from  notificators import XMPPPollNotification
 
-class XMPPSession():
+class XMPPSession(object):
     def __init__(self,jid,password,server=None,push_token=None,push_sender=None):
+        self.id_generator = XMPPSessionEventID()
         self.token = uuid.uuid4().hex
         self.push_sender = push_sender
         self.push_token = push_token
@@ -22,7 +23,7 @@ class XMPPSession():
             server = self.jid.getDomain()
         self.password=password
         self.server = server
-        self.client = XMPPSecureClient(self.jid.getDomain(),debug = [])
+        self.client = XMPPSecureClient(self.id_generator,self.jid.getDomain(),debug = [])
         self.client.RegisterDisconnectHandler(self.reconnect)
         self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
         self.messages_store = XMPPMessagesStore()
@@ -83,7 +84,7 @@ class XMPPSession():
 
         message_text = event.getBody()
         if  message_text is not None:
-            self.messages_store.append_message(jid=contact_id,inbound=True,id=event.getID(),text=message_text)
+            self.messages_store.append_message(contact_id=contact_id,inbound=True, event_id=self.id_generator.id(),text=message_text)
             self.poll_notifier.notify()
             if self.push_sender is not None:
                 contact = self.client.getRoster().getItem(contact_id)
@@ -93,7 +94,7 @@ class XMPPSession():
         unread_count = 0
         for contact in self.client.getRoster().getRawRoster().values():
             if (contact['id'] in self.messages_store.chats_store
-                and contact['read_offset'] < self.messages_store.chats_store[contact['id']][-1]['timestamp']):
+                and contact['read_offset'] < self.messages_store.chats_store[contact['id']][-1]['event_id']):
                 unread_count += 1
 
         return unread_count
@@ -133,22 +134,18 @@ class XMPPSession():
                 raise XMPPSendError()
 
             contact_id = self.client.getRoster().itemId(jid)
-            result = self.messages_store.append_message(jid=contact_id,inbound=False,id=id,text=message)
+            result = self.messages_store.append_message(contact_id=contact_id,inbound=False, event_id=self.id_generator.id(),text=message)
             self.poll_notifier.notify()
             return result
         else:
             raise XMPPSendError()
 
 
-    def contacts(self,timestamp=None):
+    def contacts(self,event_offset=None):
         if not self.client.isConnected():
             raise XMPPRosterError()
 
-        roster = self.client.getRoster().getRawRoster().values()
-        if  timestamp is not None:
-            roster = filter(lambda contact: contact['timestamp'] > timestamp,roster)
-
-        return roster
+        return self.client.getRoster().getContacts(event_offset=event_offset)
 
     def contact(self,contact_id):
         if self.client.isConnected():
@@ -175,8 +172,8 @@ class XMPPSession():
         else:
             raise XMPPRosterError()
 
-    def messages(self,contact_ids=None,timestamp=None):
-        return self.messages_store.messages(jids=contact_ids,timestamp=timestamp)
+    def messages(self,contact_ids=None,event_offset=None):
+        return self.messages_store.messages(contact_ids=contact_ids, event_offset=event_offset)
 
     def add_contact(self,jid):
         self.client.getRoster().Subscribe(jid)

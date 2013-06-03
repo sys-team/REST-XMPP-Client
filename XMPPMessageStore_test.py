@@ -25,11 +25,11 @@ def all_messages_test():
     print 'all_messages_test OK'
 
 def messages_filters_test():
-    messages = store.messages(jids=('2@jabber','1@jabber'))
+    messages = store.messages(contact_ids=('2@jabber','1@jabber'))
     messages = sorted(messages, key=lambda x: x['timestamp'])
     timestamp = messages[9]['timestamp']
 
-    messages_count = len(store.messages(jids=['2@jabber','1@jabber'],timestamp=timestamp))
+    messages_count = len(store.messages(contact_ids=['2@jabber','1@jabber'], event_offset=timestamp))
 
     if messages_count != 30:
         print 'messages_filters_test Fail',messages_count

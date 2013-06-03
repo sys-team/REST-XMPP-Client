@@ -158,7 +158,7 @@ def session(xmpp_pool,session_id=None):
 def session(xmpp_pool,session_id=None):
     """
         Request parameters:
-            offset - returns messages with timestamp greater that offset
+            offset - returns messages with event_id greater that offset
     """
     response = {}
 
@@ -166,7 +166,7 @@ def session(xmpp_pool,session_id=None):
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
 
-    response['messages'] = session.messages(timestamp=offset)
+    response['messages'] = session.messages(event_offset=offset)
 
     return response
 
@@ -174,7 +174,7 @@ def session(xmpp_pool,session_id=None):
 def session_contacts(xmpp_pool,session_id=None):
     """
         Request parameters:
-            offset - returns contacts which has been changed since offset or has messages with timestamp greater than offset
+            offset - returns contacts which has been changed since offset or has messages with event_id greater than offset
     """
     response = {}
 
@@ -182,7 +182,7 @@ def session_contacts(xmpp_pool,session_id=None):
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
 
-    response['contacts'] = session.contacts(timestamp=offset)
+    response['contacts'] = session.contacts(event_offset=offset)
 
     return response
 
@@ -198,8 +198,8 @@ def session_feed(xmpp_pool,session_id=None):
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
 
-    response['contacts'] = session.contacts(timestamp=offset)
-    response['messages'] = session.messages(timestamp=offset)
+    response['contacts'] = session.contacts(event_offset=offset)
+    response['messages'] = session.messages(event_offset=offset)
 
     return response
 
@@ -281,7 +281,7 @@ def session_contact_remove(xmpp_pool,session_id=None,contact_id=None):
 def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     """
         Request parameters:
-            offset - returns messages with timestamp greater that offset
+            offset - returns messages with event_id greater that offset
     """
     response = {}
 
@@ -291,7 +291,7 @@ def contact_messages(xmpp_pool,session_id=None,contact_id=None):
     session = get_session(xmpp_pool,session_id,request,response)
 
     try:
-        response['messages'] = session.messages(contact_ids=[contact_id],timestamp=offset)
+        response['messages'] = session.messages(contact_ids=[contact_id], event_offset=offset)
     except TypeError:
         raise_contact_error(contact_id,response)
 

@@ -3,16 +3,17 @@ __author__ = 'v.kovtash@gmail.com'
 
 import xmpp
 import uuid
-import time
 import operator
+from event_id import XMPPSessionEventID
 
 class XMPPSecureRoster(xmpp.roster.Roster):
-    def __init__(self):
+    def __init__(self,id_generator):
         xmpp.roster.Roster.__init__(self)
         self.uuid_namespace = uuid.uuid4()
         self._internal_data = {}
         self.default_priority = -128
         self.self_jid = None
+        self.id_generator = id_generator
 
     def plugin(self,owner,request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
@@ -66,10 +67,10 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             roster_item = self._get_item_data(item_id)
             internal_data_item = self._get_item_internal_data(item_id)
             roster_item['id']=item_id
+            roster_item['event_id']=self.id_generator.id()
             roster_item['jid']=jid
             roster_item['ask']=item.getAttr('ask')
             roster_item['subscription']=item.getAttr('subscription')
-            roster_item['timestamp']=time.time()
             if not roster_item.has_key('show'):
                 roster_item['show']='offline'
             if not roster_item.has_key('status'):
@@ -104,7 +105,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         typ=pres.getType()
 
         if 'jid' not in item: item['jid'] = jid.getStripped()
-        item['timestamp'] = time.time()
+        item['event_id']=self.id_generator.id()
         if not typ:
             self.DEBUG('Setting roster item %s for resource %s...'%(jid.getStripped(),jid.getResource()),'ok')
             item_resources[jid.getResource()]=res={'show':'online','status':None,'priority':0,'nick':None}
@@ -163,11 +164,17 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         item = self._get_item_data(item_id)
         if  read_offset > item['read_offset']:
             item['read_offset'] = read_offset
-            item['timestamp'] = time.time()
+            item['event_id'] = self.id_generator.id()
 
     def getItemReadOffset(self,item_id):
         item = self._get_item_data(item_id)
         return item['read_offset']
+
+    def getContacts(self,event_offset=None):
+        contacts = self.getRawRoster().values()
+        if  event_offset is not None:
+            contacts = filter(lambda contact: contact['event_id'] > event_offset,contacts)
+        return contacts
 
     def getRawItem(self,jid):
         """ Returns roster item 'jid' representation in internal format. """
