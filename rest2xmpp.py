@@ -6,6 +6,7 @@ from bottle import Bottle, template, request, abort, response
 from xmpp_plugin import XMPPPlugin, XMPPAuthError, XMPPConnectionError, XMPPSendError
 import psutil
 import os
+import time
 
 app = Bottle(catchall=True)
 app.install(XMPPPlugin(debug=False,push_sender=None))
@@ -231,11 +232,17 @@ def session_contact_add(xmpp_pool,session_id=None):
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
 
-    try:
-        session.add_contact(contact.get('jid'),name=contact.get('name'))
-        response['contacts'] = [session.contactByJID(contact.get('jid'))]
-    except KeyError:
-        raise_contact_error(contact_id,response)
+    session.add_contact(contact.get('jid'),name=contact.get('name'))
+    timeout = 5.0
+    contact_added = session.contactByJID(contact.get('jid'))
+    while timeout and contact_added is None:
+        time.sleep(0.5)
+        timeout -= 0.5
+        contact_added = session.contactByJID(contact.get('jid'))
+    if contact_added is not None:
+        response['contacts'] = [contact_added]
+    else:
+        raise_contact_error(contact.get('jid'),response)
 
     return response
 
