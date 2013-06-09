@@ -137,7 +137,6 @@ class XMPPSession(object):
         else:
             raise XMPPSendError()
 
-
     def contacts(self,event_offset=None):
         if not self.client.isConnected():
             raise XMPPRosterError()

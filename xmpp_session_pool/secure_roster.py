@@ -206,6 +206,17 @@ class XMPPSecureRoster(xmpp.roster.Roster):
     def getItemByJID(self,jid):
         return self.getItem(self.itemId(jid))
 
+    def setItem(self,jid,name=None,groups=[]):
+        """ Creates/renames contact 'jid' and sets the groups list that it now belongs to."""
+        iq=xmpp.protocol.Iq('set',xmpp.protocol.NS_ROSTER)
+        query=iq.getTag('query')
+        attrs={'jid':jid}
+        if name: attrs['name']=name
+        item=query.setTag('item',attrs)
+        for group in groups: item.addChild(node=xmpp.simplexml.Node('group',payload=[group]))
+        id = self._owner.send(iq)
+        return id
+
     def updateItem(self,contact_id,name=None,groups=None):
         if contact_id not in self._data:
             return
@@ -221,4 +232,4 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         if name is None:
             name = contact['name']
 
-        self.setItem(contact['jid'],name=name,groups=groups)
+        return self.setItem(contact['jid'],name=name,groups=groups)
