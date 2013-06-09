@@ -35,7 +35,7 @@ class XMPPSession(object):
     def clean(self,with_notification=True):
         if   with_notification:
             self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=0)
-        logging.debug('SessionEvent : Session %s start cleaning',self.jid)
+        logging.debug(u'SessionEvent : Session %s start cleaning',self.jid)
         self.client.UnregisterDisconnectHandler(self.reconnect)
         self.client.Dispatcher.disconnect()
 
@@ -46,11 +46,11 @@ class XMPPSession(object):
             try:
                 sock._sock.shutdown(socket.SHUT_RDWR)
             except:
-                logging.debug('SessionEvent : Session %s socket shutdowned', self.jid)
+                logging.debug(u'SessionEvent : Session %s socket shutdowned', self.jid)
             sock._sock.close()
             sock.PlugOut()
 
-        logging.debug('SessionEvent : Session %s cleaning done', self.jid)
+        logging.debug(u'SessionEvent : Session %s cleaning done', self.jid)
 
     def server_tuple(self):
         server_port = self.server.split(':')
@@ -69,10 +69,7 @@ class XMPPSession(object):
         self.client.Dispatcher.RegisterDefaultHandler(self.debugging_handler)
 
     def debugging_handler(self, con, event):
-        try:
-            logging.debug('XMPPEvent : %s',event)
-        except UnicodeEncodeError:
-            logging.debug('XMPPEvent : UnicodeEncodeError Exception')
+        logging.debug(u'XMPPEvent : %s ',event)
 
     def xmpp_presence(self, con, event):
         self.poll_notifier.notify()
@@ -117,7 +114,7 @@ class XMPPSession(object):
 
     def reconnect(self):
         while not self.client.isConnected():
-            logging.debug('SessionEvent : Session %s Reconnect',self.jid)
+            logging.debug(u'SessionEvent : Session %s Reconnect',self.jid)
             self.client.reconnectAndReauth()
         self.client.sendInitPresence()
         self.client.getRoster()
@@ -157,9 +154,14 @@ class XMPPSession(object):
         else:
             raise XMPPRosterError()
 
+    def add_contact(self,jid,name=None,groups=[]):
+        if self.client.isConnected():
+            self.client.getRoster().setItem(jid,name=name,groups=groups)
+            self.client.getRoster().Subscribe(jid)
+
     def update_contact(self,contact_id,name=None,groups=None):
         if self.client.isConnected():
-            self.client.getRoster().setItem(contact_id,name=name,groups=groups)
+            self.client.getRoster().updateItem(contact_id,name=name,groups=groups)
 
     def set_contact_read_offset(self,contact_id,read_offset):
         self.client.getRoster().setItemReadOffset(contact_id,read_offset)
@@ -175,20 +177,18 @@ class XMPPSession(object):
     def messages(self,contact_ids=None,event_offset=None):
         return self.messages_store.messages(contact_ids=contact_ids, event_offset=event_offset)
 
-    def add_contact(self,jid):
-        self.client.getRoster().Subscribe(jid)
-        self.client.Dispatcher.Process(0.5)
-
     def remove_contact(self,contact_id):
-        jid = self.client.getRoster().getItem(contact_id)['jid']
-        self.client.getRoster().Unauthorize(jid)
-        self.client.getRoster().Unsubscribe(jid)
-        self.client.getRoster().delItem(jid)
+        item = self.client.getRoster().getItem(contact_id)
+        if item is not None:
+            jid = self.client.getRoster().getItem(contact_id).get('jid')
+            if  jid is not None:
+                #self.client.getRoster().Unauthorize(jid)
+                #self.client.getRoster().Unsubscribe(jid)
+                self.client.getRoster().delItem(jid)
 
     def authorize_contact(self,contact_id):
         jid = self.client.getRoster().getItem(contact_id)['jid']
         self.client.getRoster().Authorize(jid)
-        self.client.Dispatcher.Process(0.5)
 
     def unauthorize_contact(self,contact_id):
         jid = self.client.getRoster().getItem(contact_id)['jid']

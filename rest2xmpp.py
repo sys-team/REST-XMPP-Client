@@ -15,7 +15,7 @@ def raise_message_sending_error(response):
     abort(404, response)
 
 def raise_contact_error(contact_id,response):
-    response['error'] = {'code':'XMPPSessionError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
+    response['error'] = {'code':'XMPPContactError','text':template('There is no contact with id {{contact_id}}',contact_id=contact_id)}
     abort(404, response)
 
 def raise_value_error(parameter_name,response):
@@ -213,6 +213,27 @@ def session_contact(xmpp_pool,session_id=None,contact_id=None):
 
     try:
         response['contact'] = session.contact(contact_id)
+    except KeyError:
+        raise_contact_error(contact_id,response)
+
+    return response
+
+@app.post('/sessions/<session_id>/contacts')
+def session_contact_add(xmpp_pool,session_id=None):
+    response = {}
+
+    if request.json is None or 'contact' not in request.json:
+        response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+        abort(400, response)
+
+    contact = request.json['contact']
+
+    check_session_id(session_id,response)
+    session = get_session(xmpp_pool,session_id,request,response)
+
+    try:
+        session.add_contact(contact.get('jid'),name=contact.get('name'))
+        response['contacts'] = [session.contactByJID(contact.get('jid'))]
     except KeyError:
         raise_contact_error(contact_id,response)
 
