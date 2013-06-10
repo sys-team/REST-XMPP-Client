@@ -36,7 +36,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
                                 'name':None,
                                 'show':'offline',
                                 'status':None,
-                                'auth_request':False,
+                                'authorization':'none',
                                 'read_offset':0,
                                 'subscription':'none',
                                 'ask':None,}
@@ -77,6 +77,8 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             roster_item['name'] = item.getAttr('name')
             roster_item['ask'] = item.getAttr('ask')
             roster_item['subscription'] = item.getAttr('subscription')
+            if roster_item['subscription'] == 'from' or roster_item['subscription'] == 'both':
+                roster_item['authorization'] = 'granted'
             roster_item['groups'] = []
             for group in item.getTags('group'):
                 roster_item['groups'].append(group.getData())
@@ -125,14 +127,16 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             roster_item = self._data.get(item_id)
             if roster_item is None:
                 roster_item = self._new_roster_item(jid.getStripped())
-                roster_item['auth_request'] = True
+                roster_item['authorization'] = 'requested'
+                roster_item['event_id']=self.id_generator.id()
             else:
                 if roster_item['subscription'] == 'to':
                     self.Authorize(roster_item['jid'])
 
         elif typ == 'subscribed':
             if item_id in self._data:
-                self._data[item_id]['auth_request'] = False
+                self._data[item_id]['authorization'] = 'granted'
+                self._data[item_id]['event_id']=self.id_generator.id()
 
         elif typ == 'unavailable' and jid.getResource() in roster_item_resources:
             del roster_item_resources[jid.getResource()]

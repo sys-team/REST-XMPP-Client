@@ -121,9 +121,9 @@ class XMPPSession(object):
 
     def send(self,contact_id,message):
         jid = self.client.getRoster().getItem(contact_id)['jid']
-        return self.sendByJID(jid,message)
+        return self.send_by_jid(jid,message)
 
-    def sendByJID(self,jid,message):
+    def send_by_jid(self,jid,message):
         self.setup_connection()
         if self.client.isConnected():
             id = self.client.send(xmpp.protocol.Message(to=jid,body=message,typ='chat'))
@@ -167,7 +167,19 @@ class XMPPSession(object):
         self.poll_notifier.notify()
         self.push_sender.notify(token=self.push_token,unread_count=self.unread_count())
 
-    def contactByJID(self,jid):
+    def set_contact_authorization(self,contact_id,authorization):
+        contact = self.client.getRoster().getItem(contact_id)
+        if contact is None or contact['authorization'] == authorization:
+            return
+
+        if  authorization == 'granted':
+            self.add_contact(contact['jid'])
+            self.client.getRoster().Authorize(contact['jid'])
+        elif authorization == 'none':
+            self.client.getRoster().Unauthorize(contact['jid'])
+
+
+    def contact_by_jid(self,jid):
         if self.client.isConnected():
             return self.client.getRoster().getItemByJID(jid)
         else:
@@ -181,17 +193,7 @@ class XMPPSession(object):
         if item is not None:
             jid = self.client.getRoster().getItem(contact_id).get('jid')
             if  jid is not None:
-                #self.client.getRoster().Unauthorize(jid)
-                #self.client.getRoster().Unsubscribe(jid)
                 self.client.getRoster().delItem(jid)
-
-    def authorize_contact(self,contact_id):
-        jid = self.client.getRoster().getItem(contact_id)['jid']
-        self.client.getRoster().Authorize(jid)
-
-    def unauthorize_contact(self,contact_id):
-        jid = self.client.getRoster().getItem(contact_id)['jid']
-        self.client.getRoster().Unauthorize(jid)
 
     def poll_changes(self):
         return self.poll_notifier.poll()

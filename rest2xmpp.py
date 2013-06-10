@@ -234,11 +234,11 @@ def session_contact_add(xmpp_pool,session_id=None):
 
     session.add_contact(contact.get('jid'),name=contact.get('name'))
     timeout = 5.0
-    contact_added = session.contactByJID(contact.get('jid'))
+    contact_added = session.contact_by_jid(contact.get('jid'))
     while timeout and contact_added is None:
         time.sleep(0.5)
         timeout -= 0.5
-        contact_added = session.contactByJID(contact.get('jid'))
+        contact_added = session.contact_by_jid(contact.get('jid'))
     if contact_added is not None:
         response['contacts'] = [contact_added]
     else:
@@ -265,26 +265,11 @@ def session_contact_update(xmpp_pool,session_id=None,contact_id=None):
             session.update_contact(contact_id,name=contact['name'])
         if 'read_offset' in contact:
             session.set_contact_read_offset(contact_id,contact['read_offset'])
+        if 'authorization' in contact:
+            session.set_contact_authorization(contact_id,contact['authorization'])
 
         response['contacts'] = [session.contact(contact_id)]
     except KeyError:
-        raise_contact_error(contact_id,response)
-
-    return response
-
-
-@app.route('/sessions/<session_id>/contacts/<contact_id>/authorize')
-def session_contact_authorize(xmpp_pool,session_id=None,contact_id=None):
-    response = {}
-
-    check_session_id(session_id,response)
-    check_contact_id(contact_id,response)
-    session = get_session(xmpp_pool,session_id,request,response)
-
-    if contact_id in session.contacts():
-        session.authorize_contact(contact_id)
-        response['contact'] = session.contact(contact_id)
-    else:
         raise_contact_error(contact_id,response)
 
     return response
