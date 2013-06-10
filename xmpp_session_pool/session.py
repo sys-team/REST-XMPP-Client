@@ -78,13 +78,13 @@ class XMPPSession(object):
         type = event.getType()
         jid_from = event.getFrom().getStripped()
         contact_id = self.client.getRoster().itemId(jid_from)
-
+        contact = self.client.getRoster().getItem(contact_id)
         message_text = event.getBody()
-        if  message_text is not None:
+        
+        if  message_text is not None and contact is not None:
             self.messages_store.append_message(contact_id=contact_id,inbound=True, event_id=self.id_generator.id(),text=message_text)
             self.poll_notifier.notify()
             if self.push_sender is not None:
-                contact = self.client.getRoster().getItem(contact_id)
                 self.push_sender.notify(token=self.push_token,message=None,unread_count=self.unread_count(),contact_name=contact['name'],contact_id=contact_id)
 
     def unread_count(self):
@@ -194,6 +194,7 @@ class XMPPSession(object):
             jid = self.client.getRoster().getItem(contact_id).get('jid')
             if  jid is not None:
                 self.client.getRoster().delItem(jid)
+        self.messages_store.remove_messages_for_conatct(contact_id)
 
     def poll_changes(self):
         return self.poll_notifier.poll()

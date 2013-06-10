@@ -49,3 +49,7 @@ class XMPPMessagesStore():
 
     def all_messages(self):
         return self.chats_store
+
+    def remove_messages_for_conatct(self,contact_id):
+        if contact_id in self.chats_store:
+            del self.chats_store[contact_id]
