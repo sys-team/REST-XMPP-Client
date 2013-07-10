@@ -4,7 +4,6 @@ __author__ = 'v.kovtash@gmail.com'
 import uuid
 import xmpp
 import logging
-import socket
 import threading
 from secure_client import XMPPSecureClient
 from message_store import XMPPMessagesStore
@@ -23,9 +22,8 @@ class XMPPSession(object):
             server = self.jid.getDomain()
         self.password=password
         self.server = server
-        self.client = XMPPSecureClient(self.id_generator,self.jid.getDomain(),debug = [])
-        self.client.RegisterDisconnectHandler(self.reconnect)
-        self.client.UnregisterDisconnectHandler(self.client.DisconnectHandler)
+        server_tuple = self.server_tuple()
+        self.client = XMPPSecureClient(jid=jid,password=password,server=server_tuple[0],port=server_tuple[1])
         self.messages_store = XMPPMessagesStore()
         self.poll_notifier = XMPPPollNotification()
         self.new_messages_count = 0
@@ -36,19 +34,9 @@ class XMPPSession(object):
         if   with_notification:
             self.push_sender.notify(token=self.push_token,message="Session closed. Login again, to start new session.",unread_count=0)
         logging.debug(u'SessionEvent : Session %s start cleaning',self.jid)
-        self.client.UnregisterDisconnectHandler(self.reconnect)
-        self.client.Dispatcher.disconnect()
+        self.client.disconnect()
 
         self.poll_notifier.stop()
-
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']
-            try:
-                sock._sock.shutdown(socket.SHUT_RDWR)
-            except:
-                logging.debug(u'SessionEvent : Session %s socket shutdowned', self.jid)
-            sock._sock.close()
-            sock.PlugOut()
 
         logging.debug(u'SessionEvent : Session %s cleaning done', self.jid)
 
@@ -98,26 +86,10 @@ class XMPPSession(object):
 
     def setup_connection(self):
         if not self.client.isConnected():
-            logging.debug('SessionEvent : Session %s Setup connection',self.jid)
-            con = self.client.connect(server=self.server_tuple())
-
-            if not self.client.isConnected() or con is None:
-                raise XMPPConnectionError(self.server)
-
-            auth = self.client.auth(self.jid.getNode(),self.password,resource = self.jid.getResource())
-            if not auth:
-                raise XMPPAuthError()
-
+            self.client.setup_connection()
             self.register_handlers()
             self.client.sendInitPresence()
             self.client.getRoster()
-
-    def reconnect(self):
-        while not self.client.isConnected():
-            logging.debug(u'SessionEvent : Session %s Reconnect',self.jid)
-            self.client.reconnectAndReauth()
-        self.client.sendInitPresence()
-        self.client.getRoster()
 
     def send(self,contact_id,message):
         jid = self.client.getRoster().getItem(contact_id)['jid']
@@ -177,7 +149,6 @@ class XMPPSession(object):
             self.client.getRoster().Authorize(contact['jid'])
         elif authorization == 'none':
             self.client.getRoster().Unauthorize(contact['jid'])
-
 
     def contact_by_jid(self,jid):
         if self.client.isConnected():
