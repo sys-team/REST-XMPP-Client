@@ -102,3 +102,56 @@ class XMPPSecureClient(xmpp.Client):
 
     def xmpp_message(self, con, event):
         pass
+
+
+    def contacts(self,event_offset=None):
+        if not self.isConnected():
+            raise XMPPRosterError()
+
+        return self.getRoster().getContacts(event_offset=event_offset)
+
+    def contact(self,contact_id):
+        if self.isConnected():
+            contact = self.getRoster().getItem(contact_id)
+            if  contact is None:
+                raise KeyError
+            else:
+                return contact
+        else:
+            raise XMPPRosterError()
+
+    def add_contact(self,jid,name=None,groups=[]):
+        if self.isConnected():
+            self.getRoster().setItem(jid,name=name,groups=groups)
+            self.getRoster().Subscribe(jid)
+
+    def update_contact(self,contact_id,name=None,groups=None):
+        if self.isConnected():
+            self.getRoster().updateItem(contact_id,name=name,groups=groups)
+
+    def set_contact_read_offset(self,contact_id,read_offset):
+        self.getRoster().setItemReadOffset(contact_id,read_offset)
+
+    def set_contact_authorization(self,contact_id,authorization):
+        contact = self.getRoster().getItem(contact_id)
+        if contact is None or contact['authorization'] == authorization:
+            return
+
+        if  authorization == 'granted':
+            self.add_contact(contact['jid'])
+            self.getRoster().Authorize(contact['jid'])
+        elif authorization == 'none':
+            self.getRoster().Unauthorize(contact['jid'])
+
+    def contact_by_jid(self,jid):
+        if self.isConnected():
+            return self.getRoster().getItemByJID(jid)
+        else:
+            raise XMPPRosterError()
+
+    def remove_contact(self,contact_id):
+        item = self.getRoster().getItem(contact_id)
+        if item is not None:
+            jid = self.getRoster().getItem(contact_id).get('jid')
+            if  jid is not None:
+                self.getRoster().delItem(jid)
