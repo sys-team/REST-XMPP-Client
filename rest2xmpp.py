@@ -104,9 +104,9 @@ def start_session(xmpp_pool):
         response['session']['session_id'] = session_id
         session = xmpp_pool.session_for_id(session_id)
         response['session']['token'] = session.token
-        response['session']['jid'] = session.jid.getStripped()
+        response['session']['jid'] = session.jid
     except KeyError:
-        response['error'] = {'code':'XMPPSessionError','text':template('There is no session with id {{session_id}}',session_id=session_id)}
+        response['error'] = {'code':'XMPPSessionError','tself.Dispatcher.disconnect()ext':template('There is no session with id {{session_id}}',session_id=session_id)}
         abort(404, response)
     except XMPPAuthError:
         response['error'] = {'code':'XMPPUpstreamAuthError','text':template('Can\'t authenticate on XMPP server with jid {{jid}}',jid=jid)}
@@ -126,7 +126,7 @@ def session(xmpp_pool,session_id=None):
 
     check_session_id(session_id,response)
     session = get_session(xmpp_pool,session_id,request,response)
-    response['session']['jid'] = session.jid.getStripped()
+    response['session']['jid'] = session.jid
 
     return response
 

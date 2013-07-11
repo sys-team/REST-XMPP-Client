@@ -19,6 +19,7 @@ class XMPPSecureClient(xmpp.Client):
         self.Namespace,self.DBG='jabber:client',xmpp.client.DBG_CLIENT
         xmpp.Client.__init__(self,self.jid.getDomain(),port,debug=[]) #['always', 'nodebuilder']
         self.id_generator = XMPPSessionEventID()
+        self._event_observers = []
 
     def reconnectAndReauth(self):
         """ Example of reconnection method. In fact, it can be used to batch connection and auth as well. """
@@ -58,6 +59,29 @@ class XMPPSecureClient(xmpp.Client):
         if requestRoster: XMPPSecureRoster(self.id_generator).PlugIn(self)
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
+    def _debugging_handler(self, con, event):
+        logging.debug(u'XMPPEvent : %s ',event)
+
+    def _xmpp_presence_handler(self, con, event):
+        self.post_contacts_notification()
+
+    def _xmpp_message_handler(self, con, event):
+        jid_from = event.getFrom().getStripped()
+        contact_id = self.roster.itemId(jid_from)
+        message_text = event.getBody()
+        self.post_message_notification(contact_id,message_text,inbound=True)
+
+    @property
+    def roster(self):
+        return self.getRoster()
+
+    @property
+    def message_storage(self):
+        if not self.__dict__.has_key('XMPPMessagesStore'):
+            XMPPMessagesStore(self.id_generator).PlugIn(self)
+        return self.XMPPMessagesStore
+
+
     def setup_connection(self):
         if not self.isConnected():
             logging.debug('SessionEvent : Session %s Setup connection',self.jid)
@@ -71,11 +95,30 @@ class XMPPSecureClient(xmpp.Client):
             if not auth:
                 raise XMPPAuthError()
 
-            self.register_handlers()
+            self.Dispatcher.RegisterHandler('presence',self._xmpp_presence_handler)
+            self.Dispatcher.RegisterHandler('iq',self._xmpp_presence_handler)
+            self.Dispatcher.RegisterHandler('message',self._xmpp_message_handler)
+            self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
+
             self.sendInitPresence()
             self.getRoster()
-            if not self.__dict__.has_key('XMPPMessagesStore'):
-                XMPPMessagesStore(self.id_generator).PlugIn(self)
+            self.message_storage
+
+    def check_credentials(self,jid,password):
+        jid = xmpp.protocol.JID(jid)
+        user = jid.getNode()
+        client = xmpp.Client(jid.getDomain(),self.Port,debug=[])
+        con = client.connect(server=self._Server)
+
+        if not client.isConnected() or con is None:
+            raise XMPPConnectionError(self.Server)
+
+        auth = client.auth(user,password,self._Resource)
+        client.Dispatcher.disconnect()
+        if not auth:
+            return False
+        else:
+            return True
 
     def disconnect(self):
         self.UnregisterDisconnectHandler(self.DisconnectHandler)
@@ -90,38 +133,50 @@ class XMPPSecureClient(xmpp.Client):
             sock._sock.close()
             sock.PlugOut()
 
-    def register_handlers(self):
-        self.Dispatcher.RegisterHandler('presence',self.xmpp_presence)
-        self.Dispatcher.RegisterHandler('iq',self.xmpp_presence)
-        #self.Dispatcher.RegisterHandler('message',self.xmpp_message)
-        self.Dispatcher.RegisterDefaultHandler(self.debugging_handler)
+    def register_events_observer(self,observer):
+        self._event_observers.append(observer)
 
-    def debugging_handler(self, con, event):
-        logging.debug(u'XMPPEvent : %s ',event)
+    def unregister_events_observer(self,observer):
+        self._event_observers.remove(observer)
 
-    def xmpp_presence(self, con, event):
-        #self.poll_notifier.notify()
-        pass
+    @property
+    def observers_count(self):
+        return len(self._event_observers)
 
-    def xmpp_message(self, con, event):
-        pass
+    def post_message_notification(self,contact_id,message_text,inbound=True):
+        for observer in self._event_observers:
+            message_appended_notification = getattr(observer, 'message_appended_notification', None)
+            if callable(message_appended_notification):
+                message_appended_notification(contact_id,message_text,inbound)
+
+    def post_contacts_notification(self):
+        for observer in self._event_observers:
+            contacts_updated_notification = getattr(observer, 'contacts_updated_notification', None)
+            if callable(contacts_updated_notification):
+                contacts_updated_notification()
+
+    def post_unread_count_notification(self):
+        for observer in self._event_observers:
+            unread_count_updated_notification = getattr(observer, 'unread_count_updated_notification', None)
+            if callable(unread_count_updated_notification):
+                unread_count_updated_notification()
 
     def messages(self,contact_ids=None,event_offset=None):
-        return self.XMPPMessagesStore.messages(contact_ids=contact_ids, event_offset=event_offset)
+        return self.message_storage.messages(contact_ids=contact_ids, event_offset=event_offset)
 
     def send_message(self,contact_id,message):
-        jid = self.getRoster().getItem(contact_id)['jid']
+        jid = self.roster.getItem(contact_id)['jid']
         return self.send_message_by_jid(jid,message)
 
     def send_message_by_jid(self,jid,message):
-        self.setup_connection()
         if self.isConnected():
             id = self.send(xmpp.protocol.Message(to=jid,body=message,typ='chat'))
             if not id:
                 raise XMPPSendError()
 
             contact_id = self.getRoster().itemId(jid)
-            result = self.XMPPMessagesStore.append_message(contact_id=contact_id,inbound=False, event_id=self.id_generator.id(),text=message)
+            result = self.message_storage.append_message(contact_id=contact_id,inbound=False, event_id=self.id_generator.id(),text=message)
+            self.post_message_notification(None,message,inbound=False)
             return result
         else:
             raise XMPPSendError()
@@ -130,59 +185,58 @@ class XMPPSecureClient(xmpp.Client):
         if not self.isConnected():
             raise XMPPRosterError()
 
-        return self.getRoster().getContacts(event_offset=event_offset)
+        return self.roster.getContacts(event_offset=event_offset)
 
     def contact(self,contact_id):
         if self.isConnected():
-            contact = self.getRoster().getItem(contact_id)
-            if  contact is None:
-                raise KeyError
-            else:
-                return contact
+            return self.roster.getItem(contact_id)
         else:
             raise XMPPRosterError()
 
     def add_contact(self,jid,name=None,groups=[]):
         if self.isConnected():
-            self.getRoster().setItem(jid,name=name,groups=groups)
-            self.getRoster().Subscribe(jid)
+            self.roster.setItem(jid,name=name,groups=groups)
+            self.roster.Subscribe(jid)
 
     def update_contact(self,contact_id,name=None,groups=None):
         if self.isConnected():
-            self.getRoster().updateItem(contact_id,name=name,groups=groups)
+            self.roster.updateItem(contact_id,name=name,groups=groups)
 
     def unread_count(self):
         unread_count = 0
-        for contact in self.getRoster().getRawRoster().values():
-            if (contact['id'] in self.XMPPMessagesStore.chats_store
-                and contact['read_offset'] < self.XMPPMessagesStore.chats_store[contact['id']][-1]['event_id']):
+        for contact in self.roster.getRawRoster().values():
+            if (contact['id'] in self.message_storage.chats_store
+                and contact['read_offset'] < self.message_storage.chats_store[contact['id']][-1]['event_id']):
                 unread_count += 1
 
         return unread_count
 
     def set_contact_read_offset(self,contact_id,read_offset):
-        self.getRoster().setItemReadOffset(contact_id,read_offset)
+        self.roster.setItemReadOffset(contact_id,read_offset)
+        self.post_unread_count_notification()
 
     def set_contact_authorization(self,contact_id,authorization):
-        contact = self.getRoster().getItem(contact_id)
+        roster = self.roster
+        contact = roster.getItem(contact_id)
         if contact is None or contact['authorization'] == authorization:
             return
 
         if  authorization == 'granted':
             self.add_contact(contact['jid'])
-            self.getRoster().Authorize(contact['jid'])
+            roster.Authorize(contact['jid'])
         elif authorization == 'none':
-            self.getRoster().Unauthorize(contact['jid'])
+            roster.Unauthorize(contact['jid'])
 
     def contact_by_jid(self,jid):
         if self.isConnected():
-            return self.getRoster().getItemByJID(jid)
+            return self.roster.getItemByJID(jid)
         else:
             raise XMPPRosterError()
 
     def remove_contact(self,contact_id):
-        item = self.getRoster().getItem(contact_id)
+        roster = self.roster
+        item = roster.getItem(contact_id)
         if item is not None:
-            jid = self.getRoster().getItem(contact_id).get('jid')
+            jid = roster.getItem(contact_id).get('jid')
             if  jid is not None:
-                self.getRoster().delItem(jid)
+                roster.delItem(jid)
