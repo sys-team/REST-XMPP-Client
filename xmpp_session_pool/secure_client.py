@@ -7,6 +7,7 @@ import logging
 from secure_roster import XMPPSecureRoster
 from event_id import XMPPSessionEventID
 from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSendError
+from message_store import XMPPMessagesStore
 
 class XMPPSecureClient(xmpp.Client):
     def __init__(self,jid,password,server,port=5222):
@@ -73,6 +74,8 @@ class XMPPSecureClient(xmpp.Client):
             self.register_handlers()
             self.sendInitPresence()
             self.getRoster()
+            if not self.__dict__.has_key('XMPPMessagesStore'):
+                XMPPMessagesStore(self.id_generator).PlugIn(self)
 
     def disconnect(self):
         self.UnregisterDisconnectHandler(self.DisconnectHandler)
@@ -103,6 +106,25 @@ class XMPPSecureClient(xmpp.Client):
     def xmpp_message(self, con, event):
         pass
 
+    def messages(self,contact_ids=None,event_offset=None):
+        return self.XMPPMessagesStore.messages(contact_ids=contact_ids, event_offset=event_offset)
+
+    def send_message(self,contact_id,message):
+        jid = self.getRoster().getItem(contact_id)['jid']
+        return self.send_message_by_jid(jid,message)
+
+    def send_message_by_jid(self,jid,message):
+        self.setup_connection()
+        if self.isConnected():
+            id = self.send(xmpp.protocol.Message(to=jid,body=message,typ='chat'))
+            if not id:
+                raise XMPPSendError()
+
+            contact_id = self.getRoster().itemId(jid)
+            result = self.XMPPMessagesStore.append_message(contact_id=contact_id,inbound=False, event_id=self.id_generator.id(),text=message)
+            return result
+        else:
+            raise XMPPSendError()
 
     def contacts(self,event_offset=None):
         if not self.isConnected():
@@ -128,6 +150,15 @@ class XMPPSecureClient(xmpp.Client):
     def update_contact(self,contact_id,name=None,groups=None):
         if self.isConnected():
             self.getRoster().updateItem(contact_id,name=name,groups=groups)
+
+    def unread_count(self):
+        unread_count = 0
+        for contact in self.getRoster().getRawRoster().values():
+            if (contact['id'] in self.XMPPMessagesStore.chats_store
+                and contact['read_offset'] < self.XMPPMessagesStore.chats_store[contact['id']][-1]['event_id']):
+                unread_count += 1
+
+        return unread_count
 
     def set_contact_read_offset(self,contact_id,read_offset):
         self.getRoster().setItemReadOffset(contact_id,read_offset)
