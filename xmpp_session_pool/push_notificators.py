@@ -1,6 +1,5 @@
 __author__ = 'kovtash'
 
-import time
 import logging
 import urllib
 import urllib2
@@ -12,7 +11,7 @@ import multiprocessing
 import os.path
 import pyapns_client
 
-class NotificationAbstract():
+class NotificationAbstract(object):
     def start(self):
         pass
 
@@ -67,7 +66,6 @@ class NotificationAbstract():
             aps_message['aps']['alert']=full_message
 
         self.perform_notification(token,aps_message)
-        print(aps_message)
 
     def perform_notification(self,token,aps_message):
         pass

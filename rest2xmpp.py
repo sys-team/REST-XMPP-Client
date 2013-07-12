@@ -93,6 +93,7 @@ def start_session(xmpp_pool):
     password = request.forms.get('password')
     server = request.forms.get('server')
     push_token = request.forms.get('push_token')
+    client_id = request.forms.get('client_id')
     response = {'session':{}}
 
     if jid is None or password is None or server is None:
@@ -100,7 +101,7 @@ def start_session(xmpp_pool):
         abort(400, response)
 
     try:
-        session_id = xmpp_pool.start_session(jid,password,server,push_token)
+        session_id = xmpp_pool.start_session(jid=jid,password=password,server=server,push_token=push_token,im_client_id=client_id)
         response['session']['session_id'] = session_id
         session = xmpp_pool.session_for_id(session_id)
         response['session']['token'] = session.token

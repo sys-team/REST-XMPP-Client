@@ -85,7 +85,6 @@ class XMPPSecureClient(xmpp.Client):
     def setup_connection(self):
         if not self.isConnected():
             logging.debug('SessionEvent : Session %s Setup connection',self.jid)
-            print(self._Server)
             con = self.connect(server=self._Server)
 
             if not self.isConnected() or con is None:
@@ -202,18 +201,23 @@ class XMPPSecureClient(xmpp.Client):
         if self.isConnected():
             self.roster.updateItem(contact_id,name=name,groups=groups)
 
+    @property
     def unread_count(self):
         unread_count = 0
         for contact in self.roster.getRawRoster().values():
             if (contact['id'] in self.message_storage.chats_store
+                and self.message_storage.chats_store[contact['id']][-1]['inbound']
                 and contact['read_offset'] < self.message_storage.chats_store[contact['id']][-1]['event_id']):
                 unread_count += 1
 
         return unread_count
 
     def set_contact_read_offset(self,contact_id,read_offset):
+        old_unread_count_value = self.unread_count
         self.roster.setItemReadOffset(contact_id,read_offset)
-        self.post_unread_count_notification()
+        self.post_contacts_notification()
+        if  old_unread_count_value != self.unread_count:
+            self.post_unread_count_notification()
 
     def set_contact_authorization(self,contact_id,authorization):
         roster = self.roster

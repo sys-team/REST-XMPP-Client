@@ -20,7 +20,6 @@ class XMPPMessagesStore(PlugIn):
         self._owner.Dispatcher.RegisterHandler('message',self.xmpp_message_handler)
 
     def xmpp_message_handler(self, con, event):
-        type = event.getType()
         jid_from = event.getFrom().getStripped()
         contact_id = self._owner.getRoster().itemId(jid_from)
         contact = self._owner.getRoster().getItem(contact_id)
