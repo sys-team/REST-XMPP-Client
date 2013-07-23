@@ -94,6 +94,8 @@ class XMPPSecureClient(xmpp.Client):
             if not auth:
                 raise XMPPAuthError()
 
+            self.message_storage #Create message storage and register its handlers before registering self handlers
+
             self.Dispatcher.RegisterHandler('presence',self._xmpp_presence_handler)
             self.Dispatcher.RegisterHandler('iq',self._xmpp_presence_handler)
             self.Dispatcher.RegisterHandler('message',self._xmpp_message_handler)
@@ -101,7 +103,6 @@ class XMPPSecureClient(xmpp.Client):
 
             self.sendInitPresence()
             self.getRoster()
-            self.message_storage
 
     def check_credentials(self,jid,password):
         jid = xmpp.protocol.JID(jid)
