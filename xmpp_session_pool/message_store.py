@@ -26,20 +26,22 @@ class XMPPMessagesStore(PlugIn):
         message_text = event.getBody()
 
         if  message_text is not None and contact is not None:
-            self.append_message(contact_id=contact_id,inbound=True, event_id=self.id_generator.id(),text=message_text)
+            self.append_message(contact_id=contact_id,inbound=True,text=message_text)
 
-    def append_message(self,contact_id,inbound,event_id,text):
+    def append_message(self,contact_id,inbound,text):
         if contact_id not in self.chats_store:
             self.chats_store[contact_id] = []
 
         messages = []
-
+        event_id = self.id_generator.id()
+        timestamp = time.time()
         for i in xrange(0, len(text), self.max_message_size):
             messages.append({'event_id':event_id,
                              'inbound':inbound,
                              'text':text[i:i+self.max_message_size],
-                             'timestamp':time.time(),
-                             'contact_id':contact_id
+                             'timestamp':timestamp,
+                             'contact_id':contact_id,
+                             'chunk_id': i
             })
 
         for message in messages:

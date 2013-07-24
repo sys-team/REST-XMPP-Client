@@ -175,7 +175,7 @@ class XMPPSecureClient(xmpp.Client):
                 raise XMPPSendError()
 
             contact_id = self.getRoster().itemId(jid)
-            result = self.message_storage.append_message(contact_id=contact_id,inbound=False, event_id=self.id_generator.id(),text=message)
+            result = self.message_storage.append_message(contact_id=contact_id,inbound=False,text=message)
             self.post_message_notification(None,message,inbound=False)
             return result
         else:
