@@ -5,7 +5,7 @@ import os
 from xmpp_session_pool import XMPPSessionPool, PyAPNSNotification, APNWSGINotification
 import tornado.ioloop
 import tornado.web
-from tornado_app import MainHandler
+from tornado_app import MainHandler, StartSession
 
 class TornadoApp(object):
     def __init__(self,debug=False,push_app_id='im',
@@ -23,6 +23,7 @@ class TornadoApp(object):
         self._xmpp_session_pool = XMPPSessionPool(debug=debug,push_sender=notification_sender)
         self._app = tornado.web.Application([
             (r"/", MainHandler),
+            (r"/start-session", StartSession,dict(session_pool = self._xmpp_session_pool))
         ])
 
     def run(self,host='0.0.0.0',port=5000):
