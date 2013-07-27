@@ -1,6 +1,7 @@
 __author__ = 'v.kovtash@gmail.com'
 
 from r2x_bottle_app import BottleApp
+from r2x_tornado_app import TornadoApp
 import logging
 import logging.handlers
 import signal
@@ -59,7 +60,7 @@ def main():
     args = arguments()
     set_logging_config(logging_level_string = args.log_level,log_file = args.log_file)
 
-    app = BottleApp(push_dev_mode=args.push_dev_mode,
+    app = TornadoApp(push_dev_mode=args.push_dev_mode,
         push_notification_sender=args.push_mechanism,
         push_server_address=args.push_server_address,
         push_app_id=args.push_app_id,
