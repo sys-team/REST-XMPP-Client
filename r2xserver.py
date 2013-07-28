@@ -5,6 +5,7 @@ import logging
 import logging.handlers
 import signal
 import sys
+from cherrypy import wsgiserver
 
 def arguments():
     import argparse
@@ -75,8 +76,12 @@ def main():
     signal.signal(signal.SIGINT, term_handler)
 
     logging.info('Starting server at address %s:%s',args.address,args.port)
-    app.run(host=args.address, port=args.port, server='cherrypy')
-
+    #app.run(host=args.address, port=args.port, server='cherrypy')
+    server = wsgiserver.CherryPyWSGIServer((args.address,args.port), app, numthreads=50, request_queue_size=1)
+    try:
+        server.start()
+    finally:
+        server.stop()
 
 if __name__ == '__main__':
     main()
