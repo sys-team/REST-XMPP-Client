@@ -66,7 +66,7 @@ class XMPPSession(object):
         return contact
 
     def add_contact(self,jid,name=None,groups=[]):
-        self.xmpp_client.add_contact(jid=jid,name=name,groups=groups)
+        return self.xmpp_client.add_contact(jid=jid,name=name,groups=groups)
 
     def update_contact(self,contact_id,name=None,groups=None):
         self.xmpp_client.update_contact(contact_id=contact_id,name=name,groups=groups)
@@ -78,7 +78,7 @@ class XMPPSession(object):
         self.xmpp_client.set_contact_authorization(contact_id=contact_id,authorization=authorization)
 
     def contact_by_jid(self,jid):
-        self.xmpp_client.contact_by_jid(jid=jid)
+        return self.xmpp_client.contact_by_jid(jid=jid)
 
     def remove_contact(self,contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
