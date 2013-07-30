@@ -6,7 +6,8 @@ from xmpp_session_pool import XMPPSessionPool, PyAPNSNotification, APNWSGINotifi
 from concurrent import futures
 import tornado.ioloop
 import tornado.web
-from tornado_app import MainHandler, StartSession
+from tornado_app import MainHandler, StartSession, SessionHandler, SessionContactsHandler, SessionMessagesHandler, \
+    SessionFeedHandler, SessionNotificationHandler, ContactHandler, ContactMessagesHandler, ServerStatusHandler
 
 class TornadoApp(object):
     def __init__(self,debug=False,push_app_id='im',
@@ -24,8 +25,16 @@ class TornadoApp(object):
         self._xmpp_session_pool = XMPPSessionPool(debug=debug,push_sender=notification_sender)
         self._async_worker = futures.ThreadPoolExecutor(max_workers=10)
         self._app = tornado.web.Application([
-            (r"/", MainHandler,dict(async_worker = self._async_worker)),
-            (r"/start-session", StartSession,dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker))
+            (r"/sessions/([^/]*)/notification", SessionNotificationHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/sessions/([^/]*)/feed", SessionFeedHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/sessions/([^/]*)/contacts", SessionContactsHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/sessions/([^/]*)/contacts/([^/]*)", ContactHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/sessions/([^/]*)/contacts/([^/]*)/messages", ContactMessagesHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/sessions/([^/]*)/messages", SessionMessagesHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/sessions/([^/]*)", SessionHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/start-session", StartSession, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/server-status", ServerStatusHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
+            (r"/", MainHandler, dict(async_worker = self._async_worker))
         ])
 
     def run(self,host='0.0.0.0',port=5000):
