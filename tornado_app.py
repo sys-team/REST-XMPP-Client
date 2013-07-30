@@ -1,6 +1,7 @@
 __author__ = 'kovtash'
 
 from tornado import web, gen
+from tornado import ioloop
 from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError
 import json
 import psutil
@@ -232,8 +233,19 @@ class SessionFeedHandler(XMPPClientHandler):
 
 
 class SessionNotificationHandler(XMPPClientHandler):
+    @web.asynchronous
     def get(self, session_id):
-        raise web.HTTPError(404)
+        self.response['session'] = {'session_id':session_id}
+        session = self.get_session(session_id)
+        session.wait_for_notification(self._on_notification)
+
+    def _on_notification(self):
+        io_loop = ioloop.IOLoop.instance()
+        io_loop.add_callback(self.send_response)
+
+    def send_response(self):
+        self.write(self.response)
+        self.finish()
 
 
 class ContactHandler(XMPPClientHandler):
