@@ -4,6 +4,7 @@ __author__ = 'v.kovtash@gmail.com'
 import uuid
 import logging
 from  notificators import XMPPPollNotification
+from Queue import Queue
 
 class XMPPSession(object):
     def __init__(self,session_id,xmpp_client,im_client):
@@ -13,6 +14,7 @@ class XMPPSession(object):
         self.poll_notifier = XMPPPollNotification()
         self.xmpp_client = xmpp_client
         self.xmpp_client.register_events_observer(self)
+        self.notification_queue = Queue()
         if not self.xmpp_client.isConnected():
             self.xmpp_client.setup_connection()
 
@@ -30,10 +32,12 @@ class XMPPSession(object):
 
         if  message_text is not None and contact is not None:
             self.poll_notifier.notify()
+            self.notify_observers()
             if inbound:
                 self.im_client.push_notification(message=None,contact_name=contact['name'],contact_id=contact_id)
 
     def contacts_updated_notification(self):
+        self.notify_observers()
         self.poll_notifier.notify()
 
     def unread_count_updated_notification(self):
@@ -85,3 +89,12 @@ class XMPPSession(object):
 
     def poll_changes(self):
         return self.poll_notifier.poll()
+
+    def wait_for_notification(self,callback):
+        self.notification_queue.put_nowait(callback)
+
+    def notify_observers(self):
+        while not self.notification_queue.empty():
+            callback = self.notification_queue.get_nowait()
+            callback()
+            self.notification_queue.task_done()
