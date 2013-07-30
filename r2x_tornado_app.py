@@ -3,6 +3,7 @@ __author__ = 'kovtash'
 import inspect
 import os
 from xmpp_session_pool import XMPPSessionPool, PyAPNSNotification, APNWSGINotification
+from concurrent import futures
 import tornado.ioloop
 import tornado.web
 from tornado_app import MainHandler, StartSession
@@ -21,9 +22,10 @@ class TornadoApp(object):
                 notification_sender = APNWSGINotification(host=push_server_address,app_id=push_app_id)
 
         self._xmpp_session_pool = XMPPSessionPool(debug=debug,push_sender=notification_sender)
+        self._async_worker = futures.ThreadPoolExecutor(max_workers=10)
         self._app = tornado.web.Application([
-            (r"/", MainHandler),
-            (r"/start-session", StartSession,dict(session_pool = self._xmpp_session_pool))
+            (r"/", MainHandler,dict(async_worker = self._async_worker)),
+            (r"/start-session", StartSession,dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker))
         ])
 
     def run(self,host='0.0.0.0',port=5000):
