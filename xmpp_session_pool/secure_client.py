@@ -239,9 +239,6 @@ class XMPPSecureClient(xmpp.Client):
             raise XMPPRosterError()
 
     def remove_contact(self,contact_id):
-        roster = self.roster
-        item = roster.getItem(contact_id)
-        if item is not None:
-            jid = roster.getItem(contact_id).get('jid')
-            if  jid is not None:
-                roster.delItem(jid)
+        item = self.roster.getItem(contact_id)
+        if item is not None and 'jid' in item:
+            self.roster.delItem(item['jid'])
