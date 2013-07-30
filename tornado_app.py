@@ -181,7 +181,7 @@ class SessionContactsHandler(XMPPClientHandler):
 
         contact = json_body['contact']
         session = self.get_session(session_id)
-        contact_added = yield self.async_worker.submit(self.add_contact, session ,contact.get('jid'), contact.get('name'))
+        contact_added = yield self.async_worker.submit(self.add_contact, session, contact.get('jid'), contact.get('name'))
         if contact_added is not None:
             self.response['contacts'] = [contact_added]
         else:
@@ -270,7 +270,7 @@ class ContactHandler(XMPPClientHandler):
         session = self.get_session(session_id)
 
         try:
-            result = yield self.async_worker.submit(session.remove_contact(contact_id))
+            yield self.async_worker.submit(session.remove_contact, contact_id)
         except TypeError:
             self.raise_contact_error(contact_id)
 
@@ -308,7 +308,6 @@ class ContactMessagesHandler(XMPPClientHandler):
 
     def post(self, session_id, contact_id):
         json_body = self.get_body()
-        print(json_body)
         try:
             message = json_body['messages']['text']
         except KeyError:
