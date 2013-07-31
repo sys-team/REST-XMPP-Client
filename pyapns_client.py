@@ -4,8 +4,10 @@ import httplib
 import functools
 import urlparse
 from sys import hexversion
+from concurrent import futures
 
 OPTIONS = {'CONFIGURED': False, 'TIMEOUT': 20}
+_async_worker = futures.ThreadPoolExecutor(max_workers=10)
 
 def configure(opts):
   if not OPTIONS['CONFIGURED']:
@@ -84,9 +86,10 @@ def provision(app_id, path_to_cert, environment, timeout=15, async=False,
   f_args = ['provision', args, callback, errback]
   if not async:
     return _xmlrpc_thread(*f_args)
-  t = threading.Thread(target=_xmlrpc_thread, args=f_args)
-  t.daemon = True
-  t.start()
+  #t = threading.Thread(target=_xmlrpc_thread, args=f_args)
+  #t.daemon = True
+  #t.start()
+  _async_worker.submit(target=_xmlrpc_thread, args=f_args)
 
 @default_callback
 @reprovision_and_retry
@@ -96,9 +99,10 @@ def notify(app_id, tokens, notifications, async=False, callback=None,
   f_args = ['notify', args, callback, errback]
   if not async:
     return _xmlrpc_thread(*f_args)
-  t = threading.Thread(target=_xmlrpc_thread, args=f_args)
-  t.daemon = True
-  t.start()
+  #t = threading.Thread(target=_xmlrpc_thread, args=f_args)
+  #t.daemon = True
+  #t.start()
+  _async_worker.submit(target=_xmlrpc_thread, args=f_args)
 
 @default_callback
 @reprovision_and_retry
@@ -107,9 +111,10 @@ def feedback(app_id, async=False, callback=None, errback=None):
   f_args = ['feedback', args, callback, errback]
   if not async:
     return _xmlrpc_thread(*f_args)
-  t = threading.Thread(target=_xmlrpc_thread, args=f_args)
-  t.daemon = True
-  t.start()
+  #t = threading.Thread(target=_xmlrpc_thread, args=f_args)
+  #t.daemon = True
+  #t.start()
+  _async_worker.submit(target=_xmlrpc_thread, args=f_args)
 
 def _xmlrpc_thread(method, args, callback, errback=None):
   if not configure({}):
