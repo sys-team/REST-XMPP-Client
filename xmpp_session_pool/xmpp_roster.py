@@ -6,7 +6,7 @@ import uuid
 import operator
 from event_id import XMPPSessionEventID
 
-class XMPPSecureRoster(xmpp.roster.Roster):
+class XMPPRoster(xmpp.roster.Roster):
     def __init__(self,id_generator):
         xmpp.roster.Roster.__init__(self)
         self.uuid_namespace = uuid.uuid4()

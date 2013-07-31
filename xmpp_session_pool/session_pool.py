@@ -5,7 +5,7 @@ import uuid
 import threading
 import xmpp
 from session import XMPPSession
-from secure_client import XMPPSecureClient
+from xmpp_client import XMPPClient
 from errors import XMPPAuthError
 
 class XMPPSessionPool(object):
@@ -20,7 +20,7 @@ class XMPPSessionPool(object):
 
     def start_session(self,jid,password,server=None,push_token=None,im_client_id=None):
         if jid not in self.xmpp_client_pool:
-            xmpp_client_thread = XMPPClientThread(XMPPSecureClient(jid=jid,password=password,server=server))
+            xmpp_client_thread = XMPPClientThread(XMPPClient(jid=jid,password=password,server=server))
             xmpp_client_thread.start()
             self.xmpp_client_pool[jid] = xmpp_client_thread
         else:

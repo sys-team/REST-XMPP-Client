@@ -4,12 +4,12 @@ __author__ = 'v.kovtash@gmail.com'
 import xmpp
 import socket
 import logging
-from secure_roster import XMPPSecureRoster
+from xmpp_roster import XMPPRoster
 from event_id import XMPPSessionEventID
 from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSendError
 from message_store import XMPPMessagesStore
 
-class XMPPSecureClient(xmpp.Client):
+class XMPPClient(xmpp.Client):
     def __init__(self,jid,password,server,port=5222):
         self.jid = xmpp.protocol.JID(jid)
         self._Password = password
@@ -50,13 +50,13 @@ class XMPPSecureClient(xmpp.Client):
         """ Return the Roster instance, previously plugging it in and
             requesting roster from server if needed. """
         if not self.__dict__.has_key('Roster'):
-            XMPPSecureRoster(self.id_generator).PlugIn(self)
+            XMPPRoster(self.id_generator).PlugIn(self)
         return self.Roster.getRoster()
 
     def sendPresence(self,jid=None,typ=None,requestRoster=0):
         """ Send some specific presence state.
             Can also request roster from server if according agrument is set."""
-        if requestRoster: XMPPSecureRoster(self.id_generator).PlugIn(self)
+        if requestRoster: XMPPRoster(self.id_generator).PlugIn(self)
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
     def _debugging_handler(self, con, event):
