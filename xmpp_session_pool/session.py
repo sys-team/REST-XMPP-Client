@@ -6,7 +6,7 @@ import logging
 from Queue import Queue
 
 class XMPPSession(object):
-    def __init__(self,session_id,xmpp_client,im_client):
+    def __init__(self, session_id, xmpp_client, im_client):
         self.session_id = session_id
         self.token = uuid.uuid4().hex
         self.im_client = im_client
@@ -16,21 +16,21 @@ class XMPPSession(object):
         if not self.xmpp_client.isConnected():
             self.xmpp_client.setup_connection()
 
-    def clean(self,with_notification=True):
+    def clean(self, with_notification=True):
         if with_notification:
             self.im_client.push_notification(message="Session closed. Login again, to start new session.")
-        logging.debug(u'SessionEvent : Session %s start cleaning',self.xmpp_client.jid)
+        logging.debug(u'SessionEvent : Session %s start cleaning', self.xmpp_client.jid)
         self.im_client.session_closed(self)
         self.xmpp_client.unregister_events_observer(self)
         logging.debug(u'SessionEvent : Session %s cleaning done', self.xmpp_client.jid)
 
-    def message_appended_notification(self,contact_id,message_text,inbound):
+    def message_appended_notification(self, contact_id, message_text, inbound):
         contact = self.xmpp_client.contact(contact_id)
 
         if  message_text is not None and contact is not None:
             self.notify_observers()
             if inbound:
-                self.im_client.push_notification(message=None,contact_name=contact['name'],contact_id=contact_id)
+                self.im_client.push_notification(message=None, contact_name=contact['name'], contact_id=contact_id)
 
     def contacts_updated_notification(self):
         self.notify_observers()
@@ -46,43 +46,43 @@ class XMPPSession(object):
     def unread_count(self):
         return self.xmpp_client.unread_count
 
-    def messages(self,contact_ids=None,event_offset=None):
-        return self.xmpp_client.messages(contact_ids=contact_ids,event_offset=event_offset)
+    def messages(self, contact_ids=None, event_offset=None):
+        return self.xmpp_client.messages(contact_ids=contact_ids, event_offset=event_offset)
 
-    def send(self,contact_id,message):
-        return self.xmpp_client.send_message(contact_id=contact_id,message=message)
+    def send(self, contact_id, message):
+        return self.xmpp_client.send_message(contact_id=contact_id, message=message)
 
-    def send_by_jid(self,jid,message):
-        return self.xmpp_client.send_message_by_jid(jid=jid,message=message)
+    def send_by_jid(self, jid, message):
+        return self.xmpp_client.send_message_by_jid(jid=jid, message=message)
 
-    def contacts(self,event_offset=None):
+    def contacts(self, event_offset=None):
         return self.xmpp_client.contacts(event_offset=event_offset)
 
-    def contact(self,contact_id):
+    def contact(self, contact_id):
         contact = self.xmpp_client.contact(contact_id)
         if  contact is None:
             raise KeyError
         return contact
 
-    def add_contact(self,jid,name=None,groups=[]):
-        return self.xmpp_client.add_contact(jid=jid,name=name,groups=groups)
+    def add_contact(self, jid, name=None, groups=[]):
+        return self.xmpp_client.add_contact(jid=jid, name=name, groups=groups)
 
-    def update_contact(self,contact_id,name=None,groups=None):
-        self.xmpp_client.update_contact(contact_id=contact_id,name=name,groups=groups)
+    def update_contact(self, contact_id, name=None, groups=None):
+        self.xmpp_client.update_contact(contact_id=contact_id, name=name, groups=groups)
 
-    def set_contact_read_offset(self,contact_id,read_offset):
-        self.xmpp_client.set_contact_read_offset(contact_id=contact_id,read_offset=read_offset)
+    def set_contact_read_offset(self, contact_id, read_offset):
+        self.xmpp_client.set_contact_read_offset(contact_id=contact_id, read_offset=read_offset)
 
-    def set_contact_authorization(self,contact_id,authorization):
-        self.xmpp_client.set_contact_authorization(contact_id=contact_id,authorization=authorization)
+    def set_contact_authorization(self, contact_id, authorization):
+        self.xmpp_client.set_contact_authorization(contact_id=contact_id, authorization=authorization)
 
-    def contact_by_jid(self,jid):
+    def contact_by_jid(self, jid):
         return self.xmpp_client.contact_by_jid(jid=jid)
 
-    def remove_contact(self,contact_id):
+    def remove_contact(self, contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
 
-    def wait_for_notification(self,callback):
+    def wait_for_notification(self, callback):
         self.notification_queue.put_nowait(callback)
 
     def notify_observers(self):

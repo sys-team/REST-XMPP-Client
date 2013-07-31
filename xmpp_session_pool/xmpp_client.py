@@ -97,7 +97,7 @@ class XMPPClient(xmpp.Client):
             self.message_storage #Create message storage and register its handlers before registering self handlers
 
             self.Dispatcher.RegisterHandler('presence',self._xmpp_presence_handler)
-            self.Dispatcher.RegisterHandler('iq',self._xmpp_presence_handler)
+            self.Dispatcher.RegisterHandler('iq',self._xmpp_presence_handler,'set',xmpp.protocol.NS_ROSTER)
             self.Dispatcher.RegisterHandler('message',self._xmpp_message_handler)
             self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
 
@@ -213,14 +213,14 @@ class XMPPClient(xmpp.Client):
 
         return unread_count
 
-    def set_contact_read_offset(self,contact_id,read_offset):
+    def set_contact_read_offset(self, contact_id, read_offset):
         old_unread_count_value = self.unread_count
-        self.roster.setItemReadOffset(contact_id,read_offset)
-        self.post_contacts_notification()
+        if self.roster.setItemReadOffset(contact_id, read_offset):
+            self.post_contacts_notification()
         if  old_unread_count_value != self.unread_count:
             self.post_unread_count_notification()
 
-    def set_contact_authorization(self,contact_id,authorization):
+    def set_contact_authorization(self, contact_id, authorization):
         roster = self.roster
         contact = roster.getItem(contact_id)
         if contact is None or contact['authorization'] == authorization:
