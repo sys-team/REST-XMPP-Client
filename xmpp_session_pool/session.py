@@ -3,7 +3,6 @@ __author__ = 'v.kovtash@gmail.com'
 
 import uuid
 import logging
-from  notificators import XMPPPollNotification
 from Queue import Queue
 
 class XMPPSession(object):
@@ -11,7 +10,6 @@ class XMPPSession(object):
         self.session_id = session_id
         self.token = uuid.uuid4().hex
         self.im_client = im_client
-        self.poll_notifier = XMPPPollNotification()
         self.xmpp_client = xmpp_client
         self.xmpp_client.register_events_observer(self)
         self.notification_queue = Queue()
@@ -24,21 +22,18 @@ class XMPPSession(object):
         logging.debug(u'SessionEvent : Session %s start cleaning',self.xmpp_client.jid)
         self.im_client.session_closed(self)
         self.xmpp_client.unregister_events_observer(self)
-        self.poll_notifier.stop()
         logging.debug(u'SessionEvent : Session %s cleaning done', self.xmpp_client.jid)
 
     def message_appended_notification(self,contact_id,message_text,inbound):
         contact = self.xmpp_client.contact(contact_id)
 
         if  message_text is not None and contact is not None:
-            self.poll_notifier.notify()
             self.notify_observers()
             if inbound:
                 self.im_client.push_notification(message=None,contact_name=contact['name'],contact_id=contact_id)
 
     def contacts_updated_notification(self):
         self.notify_observers()
-        self.poll_notifier.notify()
 
     def unread_count_updated_notification(self):
         self.im_client.push_notification(sound=False)
@@ -86,9 +81,6 @@ class XMPPSession(object):
 
     def remove_contact(self,contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
-
-    def poll_changes(self):
-        return self.poll_notifier.poll()
 
     def wait_for_notification(self,callback):
         self.notification_queue.put_nowait(callback)
