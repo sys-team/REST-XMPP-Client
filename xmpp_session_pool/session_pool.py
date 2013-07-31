@@ -8,6 +8,7 @@ from session import XMPPSession
 from xmpp_client import XMPPClient
 from errors import XMPPAuthError
 
+
 class XMPPSessionPool(object):
     def __init__(self,debug=False,push_sender=None):
         self.session_pool = {}
@@ -70,6 +71,7 @@ class XMPPSessionPool(object):
         if self.push_sender is not None:
             self.push_sender.stop()
 
+
 class XMPPClientThread(threading.Thread):
     """Threaded XMPP client"""
     def __init__(self, client):
@@ -89,6 +91,7 @@ class XMPPClientThread(threading.Thread):
 
     def stop(self):
         self.keepRunning = False
+
 
 class IMClient(object):
     def __init__(self,client_id,push_token=None,push_sender=None):
