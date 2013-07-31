@@ -4,6 +4,7 @@ import logging
 import urllib
 import urllib2
 from urllib2 import URLError, HTTPError
+from Queue import Queue
 import json
 import threading
 from multiprocessing import Process
@@ -76,12 +77,9 @@ class APNWSGINotification(threading.Thread, NotificationAbstract):
         if  host is None or app_id is None:
             raise ValueError
         self.push_url = os.path.join(host,app_id)
-
-        self.notifications_available = threading.Condition()
-        self.notifications_lock = threading.Lock()
         super(APNWSGINotification, self).__init__()
         self.keepRunning = True
-        self.notifications=[]
+        self.notifications = Queue()
 
     def run(self):
         def send_notification(notification):
@@ -91,30 +89,22 @@ class APNWSGINotification(threading.Thread, NotificationAbstract):
             except URLError, HTTPError:
                 pass
 
-        while self.keepRunning:
-            with self.notifications_available:
-                self.notifications_available.wait()
-
-            with self.notifications_lock:
-                for i in xrange(len(self.notifications)):
-                    notification = self.notifications.pop(0)
-                    p = Process(target=send_notification, args=(notification,))
-                    p.start()
+        while self.keepRunning or not self.notifications.empty():
+            notification = self.notifications.get()
+            if notification is not None:
+                p = Process(target=send_notification, args=(notification,))
+                p.start()
+                self.notifications.task_done()
 
     def stop(self):
         self.keepRunning = False
-        with self.notifications_available:
-            self.notifications_available.notify_all()
-
+        self.notifications.put(None)
         for child_process in multiprocessing.active_children():
             if  child_process.is_alive():
                 child_process.join(10)
 
     def perform_notification(self,token,aps_message):
-        with self.notifications_lock:
-            self.notifications.append({'token':token,'message':json.dumps(aps_message)})
-        with self.notifications_available:
-            self.notifications_available.notify_all()
+        self.notifications.put({'token':token,'message':json.dumps(aps_message)})
 
 
 class PyAPNSNotification(NotificationAbstract):
