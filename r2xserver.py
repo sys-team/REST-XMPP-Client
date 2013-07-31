@@ -58,7 +58,7 @@ def set_logging_config(logging_level_string = 'info',
 
 def main():
     args = arguments()
-    set_logging_config(logging_level_string = args.log_level,log_file = args.log_file)
+    set_logging_config(logging_level_string = args.log_level, log_file = args.log_file)
 
     app = TornadoApp(push_dev_mode=args.push_dev_mode,
         push_notification_sender=args.push_mechanism,

@@ -30,7 +30,7 @@ class XMPPSession(object):
         if  message_text is not None and contact is not None:
             self.notify_observers()
             if inbound:
-                self.im_client.push_notification(message=None, contact_name=contact['name'], contact_id=contact_id)
+                self.im_client.push_notification(message=message_text, contact_name=contact['name'], contact_id=contact_id)
 
     def contacts_updated_notification(self):
         self.notify_observers()
