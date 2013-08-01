@@ -26,15 +26,17 @@ class NotificationAbstract(object):
 
         full_message = None
         if  message is not None or contact_name is not None:
-            full_message = ''
+            full_message_parts = []
             if contact_name is not None:
-                full_message = full_message.join([contact_name])
+                full_message_parts.append(contact_name)
 
                 if  message is not None:
-                   full_message = full_message.join([': '])
+                    full_message_parts.append(': ')
 
             if  message is not None:
-                full_message = full_message.join([message])
+                full_message_parts.append(message)
+
+            full_message = ''.join(full_message_parts)
 
         aps_message = {'aps':{}}
 
