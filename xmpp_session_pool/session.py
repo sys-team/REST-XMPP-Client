@@ -15,6 +15,7 @@ class XMPPSession(object):
         self.notification_queue = Queue()
         if not self.xmpp_client.isConnected():
             self.xmpp_client.setup_connection()
+        self.should_send_message_body = False
 
     def clean(self, with_notification=True):
         if with_notification:
@@ -30,7 +31,11 @@ class XMPPSession(object):
         if  message_text is not None and contact is not None:
             self.notify_observers()
             if inbound:
-                self.im_client.push_notification(message=message_text, contact_name=contact['name'], contact_id=contact_id)
+                if self.should_send_message_body:
+                    message_body = message_text
+                else:
+                    message_body = None
+                self.im_client.push_notification(message=message_body, contact_name=contact['name'], contact_id=contact_id)
 
     def contacts_updated_notification(self):
         self.notify_observers()
@@ -86,7 +91,8 @@ class XMPPSession(object):
         self.notification_queue.put_nowait(callback)
 
     def notify_observers(self):
-        while not self.notification_queue.empty():
-            callback = self.notification_queue.get_nowait()
+        notification_queue = self.notification_queue
+        while not notification_queue.empty():
+            callback = notification_queue.get_nowait()
             callback()
-            self.notification_queue.task_done()
+            notification_queue.task_done()
