@@ -141,9 +141,9 @@ class StartSession(XMPPClientHandler):
 class SessionHandler(XMPPClientHandler):
     def get(self, session_id):
         self.response['session'] = {'session_id':session_id}
-
         session = self.get_session(session_id)
         self.response['session']['jid'] = session.jid
+        self.response['session']['should_send_message_body'] = session.should_send_message_body
 
         self.write(self.response)
 
@@ -157,6 +157,20 @@ class SessionHandler(XMPPClientHandler):
             raise web.HTTPError(404)
 
         self.write(self.response)
+
+    def put(self, session_id):
+        self.response['session'] = {'session_id':session_id}
+        session = self.get_session(session_id)
+
+        json_body = self.get_body()
+        if 'session' not in json_body:
+            self.response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+            raise web.HTTPError(400)
+
+        session_body = json_body['session']
+
+        if 'should_send_message_body' in session_body:
+            session.should_send_message_body = session['should_send_message_body']
 
 
 class SessionContactsHandler(XMPPClientHandler):
