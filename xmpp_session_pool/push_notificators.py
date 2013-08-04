@@ -1,36 +1,42 @@
 __author__ = 'kovtash'
 
-import time
 import logging
 import urllib
 import urllib2
 from urllib2 import URLError, HTTPError
+from Queue import Queue
 import json
 import threading
 from multiprocessing import Process
 import multiprocessing
 import os.path
 import pyapns_client
+import time
 
-class NotificationAbstract():
+class NotificationAbstract(object):
     def start(self):
         pass
 
     def stop(self):
         pass
 
-    def notify(self,token=None,message=None,unread_count=None,max_message_len=100,message_cut_end='...',contact_name=None,contact_id=None,sound=True):
+    def notify(self, token=None, message=None, unread_count=None, max_message_len=100, message_cut_end='...', contact_name=None, contact_id=None, sound=True):
+        if token is None:
+            return
+
         full_message = None
         if  message is not None or contact_name is not None:
-            full_message = ''
+            full_message_parts = []
             if contact_name is not None:
-                full_message = full_message.join([contact_name])
+                full_message_parts.append(contact_name)
 
                 if  message is not None:
-                   full_message = full_message.join([': '])
+                    full_message_parts.append(': ')
 
             if  message is not None:
-                full_message = full_message.join([message])
+                full_message_parts.append(message)
+
+            full_message = ''.join(full_message_parts)
 
         aps_message = {'aps':{}}
 
@@ -38,19 +44,19 @@ class NotificationAbstract():
             aps_message['aps']['sound'] = 'chime'
 
         if  full_message is not None:
-            aps_message['aps']['alert']=''
+            aps_message['aps']['alert'] = ''
 
         if unread_count is not None:
-            aps_message['aps']['badge']=unread_count
+            aps_message['aps']['badge'] = unread_count
 
         if contact_id is not None:
-            aps_message['im']={}
-            aps_message['im']['contact_id']=contact_id
+            aps_message['im'] = {}
+            aps_message['im']['contact_id'] = contact_id
 
-        payload = json.dumps(aps_message,separators=(',',':'), ensure_ascii=False).encode('utf-8')
+        payload = json.dumps(aps_message, separators = (',', ':'), ensure_ascii = False).encode('utf-8')
         max_payload_len = 250 - len(payload)
 
-        if  full_message is not None and token is not None:
+        if  full_message is not None:
             if  len(full_message) > max_message_len:
                 full_message = full_message[:max_message_len] + message_cut_end
 
@@ -61,76 +67,91 @@ class NotificationAbstract():
 
                 full_message = full_message + message_cut_end
 
-            aps_message['aps']['alert']=full_message
-        else:
-            return
+            aps_message['aps']['alert'] = full_message
 
-        self.perform_notification(token,aps_message)
+        self.perform_notification(token, aps_message)
 
-    def perform_notification(self,token,aps_message):
+    def perform_notification(self, token, aps_message):
         pass
 
 
 class APNWSGINotification(threading.Thread, NotificationAbstract):
-    def __init__(self,host,app_id):
+    def __init__(self, host, app_id):
         if  host is None or app_id is None:
             raise ValueError
-        self.push_url = os.path.join(host,app_id)
-
-        self.notifications_available = threading.Condition()
-        self.notifications_lock = threading.Lock()
+        self.push_url = os.path.join(host, app_id)
         super(APNWSGINotification, self).__init__()
         self.keepRunning = True
-        self.notifications=[]
+        self.notifications = Queue()
 
     def run(self):
         def send_notification(notification):
             post_data = urllib.urlencode(notification)
             try:
-                urllib2.urlopen(self.push_url,data=post_data)
+                urllib2.urlopen(self.push_url, data = post_data)
             except URLError, HTTPError:
                 pass
 
-        while self.keepRunning:
-            with self.notifications_available:
-                self.notifications_available.wait()
-
-            with self.notifications_lock:
-                for i in xrange(len(self.notifications)):
-                    notification = self.notifications.pop(0)
-                    p = Process(target=send_notification, args=(notification,))
-                    p.start()
+        while self.keepRunning or not self.notifications.empty():
+            notification = self.notifications.get()
+            if notification is not None:
+                p = Process(target = send_notification, args = (notification,))
+                p.start()
+                self.notifications.task_done()
 
     def stop(self):
         self.keepRunning = False
-        with self.notifications_available:
-            self.notifications_available.notify_all()
-
+        self.notifications.put(None)
         for child_process in multiprocessing.active_children():
             if  child_process.is_alive():
                 child_process.join(10)
 
-    def perform_notification(self,token,aps_message):
-        with self.notifications_lock:
-            self.notifications.append({'token':token,'message':json.dumps(aps_message)})
-        with self.notifications_available:
-            self.notifications_available.notify_all()
+    def perform_notification(self, token,aps_message):
+        self.notifications.put({'token':token,'message':json.dumps(aps_message)})
 
 
-class PyAPNSNotification(NotificationAbstract):
-    def __init__(self,host,app_id,cert_file,dev_mode=False):
+class PyAPNSNotification(threading.Thread, NotificationAbstract):
+    def __init__(self, host, app_id, cert_file, dev_mode = False, reconnect_interval=10):
+        super(PyAPNSNotification, self).__init__()
+        self.keepRunning = True
+        self.is_server_ready = False
+        self.notifications = Queue()
         pyapns_client.configure({'HOST': host})
+        self.reconnect_interval = reconnect_interval
         self.app_id = app_id
         self.cert_file = cert_file
-        self.dev_mode = dev_mode
-
-    def start(self):
-        if  self.dev_mode:
-            mode = 'sandbox'
+        if  dev_mode:
+            self.mode = 'sandbox'
         else:
-            mode = 'production'
+            self.mode = 'production'
 
-        pyapns_client.provision(self.app_id,open(self.cert_file).read(), mode)
+    def run(self):
+        while self.keepRunning or not self.notifications.empty():
+            if not self.is_server_ready:
+                try:
+                    pyapns_client.provision(self.app_id, open(self.cert_file).read(), self.mode)
+                    self.is_server_ready = True
+                except Exception:
+                    if self.keepRunning:
+                        self.is_server_ready = False
+                        time.sleep(self.reconnect_interval)
+                        continue
+                    else:
+                        break
 
-    def perform_notification(self,token,aps_message):
-        pyapns_client.notify(self.app_id,token,aps_message,async=True)
+            notification = self.notifications.get()
+            if notification is not None:
+                try:
+                    pyapns_client.notify(self.app_id, notification['token'], notification['message'])
+                except Exception:
+                    self.is_server_ready = False
+                    self.notifications.put(notification)
+
+                self.notifications.task_done()
+
+    def stop(self):
+        self.keepRunning = False
+        self.notifications.put(None)
+
+    def perform_notification(self, token, aps_message):
+        self.notifications.put({'token':token,'message':aps_message})

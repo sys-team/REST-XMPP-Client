@@ -1,11 +1,11 @@
 __author__ = 'v.kovtash@gmail.com'
 
-from app_builder import make_app
+from r2x_bottle_app import BottleApp
+from r2x_tornado_app import TornadoApp
 import logging
 import logging.handlers
 import signal
 import sys
-from cherrypy import wsgiserver
 
 def arguments():
     import argparse
@@ -58,9 +58,9 @@ def set_logging_config(logging_level_string = 'info',
 
 def main():
     args = arguments()
-    set_logging_config(logging_level_string = args.log_level,log_file = args.log_file)
+    set_logging_config(logging_level_string = args.log_level, log_file = args.log_file)
 
-    app = make_app(push_dev_mode=args.push_dev_mode,
+    app = TornadoApp(push_dev_mode=args.push_dev_mode,
         push_notification_sender=args.push_mechanism,
         push_server_address=args.push_server_address,
         push_app_id=args.push_app_id,
@@ -68,7 +68,7 @@ def main():
 
     def term_handler(signum = None, frame = None):
         logging.info('Server cleanup started')
-        app.close()
+        app.stop()
         logging.info('Server shuts down')
         sys.exit(0)
 
@@ -76,12 +76,8 @@ def main():
     signal.signal(signal.SIGINT, term_handler)
 
     logging.info('Starting server at address %s:%s',args.address,args.port)
-    #app.run(host=args.address, port=args.port, server='cherrypy')
-    server = wsgiserver.CherryPyWSGIServer((args.address,args.port), app, numthreads=50, request_queue_size=1)
-    try:
-        server.start()
-    finally:
-        server.stop()
+    app.run(host=args.address, port=args.port)
+
 
 if __name__ == '__main__':
     main()

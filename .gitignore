@@ -36,6 +36,7 @@ nosetests.xml
 
 # Virtual env
 venv/
+pypy/
 
 # IDEA
 .idea/

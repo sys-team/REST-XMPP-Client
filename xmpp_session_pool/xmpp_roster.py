@@ -6,7 +6,7 @@ import uuid
 import operator
 from event_id import XMPPSessionEventID
 
-class XMPPSecureRoster(xmpp.roster.Roster):
+class XMPPRoster(xmpp.roster.Roster):
     def __init__(self,id_generator):
         xmpp.roster.Roster.__init__(self)
         self.uuid_namespace = uuid.uuid4()
@@ -186,6 +186,8 @@ class XMPPSecureRoster(xmpp.roster.Roster):
             if  read_offset > item['read_offset']:
                 item['read_offset'] = read_offset
                 item['event_id'] = self.id_generator.id()
+                return True
+        return False
 
     def getItemReadOffset(self,item_id):
         if item_id in self._data and 'read_offset' in self._data[item_id]:
@@ -221,7 +223,7 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         id = self._owner.send(iq)
         return id
 
-    def updateItem(self,contact_id,name=None,groups=None):
+    def updateItem(self, contact_id, name=None, groups=None):
         if contact_id not in self._data:
             return
 
@@ -236,4 +238,4 @@ class XMPPSecureRoster(xmpp.roster.Roster):
         if name is None:
             name = contact['name']
 
-        return self.setItem(contact['jid'],name=name,groups=groups)
+        return self.setItem(contact['jid'], name=name, groups=groups)
