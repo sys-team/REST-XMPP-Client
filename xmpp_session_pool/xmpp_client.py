@@ -168,18 +168,38 @@ class XMPPClient(xmpp.Client):
         jid = self.roster.getItem(contact_id)['jid']
         return self.send_message_by_jid(jid,message)
 
-    def send_message_by_jid(self,jid,message):
+    def send_message_by_jid(self, jid, message):
         if self.isConnected():
-            id = self.send(xmpp.protocol.Message(to=jid,body=message,typ='chat'))
+            delivery_receipt_request = xmpp.protocol.Protocol(name='request', xmlns='urn:xmpp:receipts')
+            message_stanza = xmpp.protocol.Message(to=jid, body=message,
+                typ='chat',
+                payload=[delivery_receipt_request])
+
+            logging.debug(u"XMPPEvent : %s"%message_stanza)
+            message_id = self.send(message_stanza)
             if not id:
                 raise XMPPSendError()
 
             contact_id = self.getRoster().itemId(jid)
-            result = self.message_storage.append_message(contact_id=contact_id,inbound=False,text=message)
-            self.post_message_notification(None,message,inbound=False)
+            result = self.message_storage.append_message(contact_id=contact_id, inbound=False, text=message, message_id=message_id)
+            self.post_message_notification(None, message, inbound=False)
             return result
         else:
             raise XMPPSendError()
+
+    def send_message_delivery_receipt(self, contact_id, message_id):
+        jid = self.roster.getItem(contact_id)['jid']
+        self.send_message_delivery_receipt_by_jid(jid, message_id)
+
+    def send_message_delivery_receipt_by_jid(self, jid, message_id):
+        if  self.isConnected():
+            delivery_receipt_ack = xmpp.protocol.Protocol(name='received', xmlns='urn:xmpp:receipts', attrs={'id':message_id})
+            message_stanza = xmpp.protocol.Message(to=jid, payload=[delivery_receipt_ack])
+
+            logging.debug(u"XMPPEvent : %s"%message_stanza)
+            self.send(message_stanza)
+            if not id:
+                raise XMPPSendError()
 
     def contacts(self,event_offset=None):
         if not self.isConnected():
