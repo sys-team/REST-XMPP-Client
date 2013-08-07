@@ -42,6 +42,7 @@ class XMPPMessagesStore(PlugIn):
                 for message in self.chats_store[contact_id]:
                     if not message['inbound'] and message['message_id'] == message_id:
                         message['delivered'] = True
+                        message['event_id'] = self.id_generator.id()
             return
 
         if  message_text is not None and contact is not None:
