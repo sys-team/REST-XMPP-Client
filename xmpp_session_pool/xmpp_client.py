@@ -68,8 +68,19 @@ class XMPPClient(xmpp.Client):
     def _xmpp_message_handler(self, con, event):
         jid_from = event.getFrom().getStripped()
         contact_id = self.roster.itemId(jid_from)
-        message_text = event.getBody()
-        self.post_message_notification(contact_id,message_text,inbound=True)
+
+        if contact_id is None:
+            return
+
+        received = event.getTag('received')
+        if received is not None: #delivery report received
+            message_id = received.getAttr('id')
+            if message_id is not None:
+                self.post_delivery_report_notification(contact_id, message_id)
+        else:
+            message_text = event.getBody()
+            if message_text is not None:
+                self.post_message_notification(contact_id, message_text, inbound=True)
 
     @property
     def roster(self):
@@ -143,11 +154,17 @@ class XMPPClient(xmpp.Client):
     def observers_count(self):
         return len(self._event_observers)
 
-    def post_message_notification(self,contact_id,message_text,inbound=True):
+    def post_message_notification(self, contact_id, message_text, inbound=True):
         for observer in self._event_observers:
             message_appended_notification = getattr(observer, 'message_appended_notification', None)
             if callable(message_appended_notification):
-                message_appended_notification(contact_id,message_text,inbound)
+                message_appended_notification(contact_id, message_text, inbound)
+
+    def post_delivery_report_notification(self, contact_id, message_id):
+        for observer in self._event_observers:
+            message_appended_notification = getattr(observer, 'message_delivered_notification', None)
+            if callable(message_appended_notification):
+                message_appended_notification(contact_id, message_id)
 
     def post_contacts_notification(self):
         for observer in self._event_observers:
