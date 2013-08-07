@@ -37,6 +37,9 @@ class XMPPSession(object):
                     message_body = None
                 self.im_client.push_notification(message=message_body, contact_name=contact['name'], contact_id=contact_id)
 
+    def message_delivered_notification(self, contact_id, message_id):
+        self.notify_observers()
+
     def contacts_updated_notification(self):
         self.notify_observers()
 
