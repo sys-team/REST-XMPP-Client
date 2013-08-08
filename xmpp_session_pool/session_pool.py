@@ -7,10 +7,64 @@ import xmpp
 from session import XMPPSession
 from xmpp_client import XMPPClient
 from errors import XMPPAuthError
+import asyncore
+import logging
+
+class XMPPAsyncoreDispatcher(asyncore.dispatcher):
+    """Async XMPPClient dispatcher"""
+
+    ioLoopThread = threading.Thread(target=asyncore.loop)
+
+    def __init__(self, client):
+        self.client = client
+        if 'TCPsocket' in self.client.__dict__:
+            asyncore.dispatcher.__init__(self, self.client.__dict__['TCPsocket']._sock)
+
+    def handle_read(self):
+        try:
+            if self.client.isConnected():
+                self.client.Process()
+        except xmpp.protocol.StreamError:
+            self.close()
+        except Exception as e:
+            logging.exception(e)
+
+    def handle_close(self):
+        self.close()
+
+    def start(self):
+        if not XMPPAsyncoreDispatcher.ioLoopThread.isAlive():
+            XMPPAsyncoreDispatcher.ioLoopThread = threading.Thread(target=asyncore.loop)
+            XMPPAsyncoreDispatcher.ioLoopThread.start()
+
+    def stop(self):
+        self.client.close()
+        self.close()
+
+
+class XMPPThreadedDispatcher(threading.Thread):
+    """Threaded XMPPClient dispatcher"""
+    def __init__(self, client):
+        super(XMPPThreadedDispatcher, self).__init__()
+        self.client = client
+        self.keepRunning = True
+
+    def run(self):
+        while self.keepRunning:
+            try:
+                self.client.Process(30)
+            except xmpp.protocol.StreamError:
+                self.client.close()
+                return
+
+        self.client.close()
+
+    def stop(self):
+        self.keepRunning = False
 
 
 class XMPPSessionPool(object):
-    def __init__(self,debug=False,push_sender=None):
+    def __init__(self, debug=False, push_sender=None):
         self.session_pool = {}
         self.xmpp_client_pool = {}
         self.im_client_pool = {}
@@ -19,25 +73,28 @@ class XMPPSessionPool(object):
         if self.push_sender is not None:
             self.push_sender.start()
 
-    def start_session(self,jid,password,server=None,push_token=None,im_client_id=None):
+    def start_session(self, jid, password, server=None, push_token=None, im_client_id=None):
         if jid not in self.xmpp_client_pool:
-            xmpp_client_thread = XMPPClientThread(XMPPClient(jid=jid,password=password,server=server))
-            xmpp_client_thread.start()
-            self.xmpp_client_pool[jid] = xmpp_client_thread
+            xmpp_client = XMPPClient(jid=jid, password=password, server=server)
+            xmpp_client.setup_connection()
+            xmpp_dispatcher = XMPPThreadedDispatcher(xmpp_client)
+            xmpp_dispatcher.start()
+
+            self.xmpp_client_pool[jid] = xmpp_dispatcher
         else:
-            xmpp_client_thread = self.xmpp_client_pool[jid]
-            if not xmpp_client_thread.client.check_credentials(jid,password):
+            xmpp_dispatcher = self.xmpp_client_pool[jid]
+            if not xmpp_dispatcher.client.check_credentials(jid, password):
                 raise XMPPAuthError
 
         if im_client_id is None:
             im_client_id = uuid.uuid4().hex
 
         if im_client_id not in self.im_client_pool:
-            self.im_client_pool[im_client_id] = IMClient(client_id=im_client_id,push_token=push_token,push_sender=self.push_sender)
+            self.im_client_pool[im_client_id] = IMClient(client_id=im_client_id, push_token=push_token, push_sender=self.push_sender)
 
         im_client = self.im_client_pool[im_client_id]
 
-        session = im_client.start_session(jid=jid,xmpp_client=xmpp_client_thread.client)
+        session = im_client.start_session(jid=jid, xmpp_client=xmpp_dispatcher.client)
         if session.session_id not in self.session_pool:
             self.session_pool[session.session_id] = session
 
@@ -45,11 +102,10 @@ class XMPPSessionPool(object):
 
     def close_session(self,session_id,with_notification=False):
         session = self.session_pool[session_id]
-        xmpp_client_thread = None
         im_client = session.im_client
 
         if session.xmpp_client.jid in self.xmpp_client_pool:
-            xmpp_client_thread = self.xmpp_client_pool[session.xmpp_client.jid]
+            xmpp_dispatcher = self.xmpp_client_pool[session.xmpp_client.jid]
 
         if len(im_client.sessions) and im_client.client_id in self.im_client_pool:
             del self.im_client_pool[im_client.client_id]
@@ -57,9 +113,8 @@ class XMPPSessionPool(object):
         session.clean(with_notification=with_notification)
         del self.session_pool[session_id]
 
-        if  xmpp_client_thread is not None and xmpp_client_thread.is_alive and not xmpp_client_thread.client.observers_count:
-            xmpp_client_thread.stop()
-            xmpp_client_thread.join(60)
+        if  xmpp_dispatcher is not None and not xmpp_dispatcher.client.observers_count:
+            xmpp_dispatcher.stop()
             del self.xmpp_client_pool[session.xmpp_client.jid]
 
     def session_for_id(self,session_id):
@@ -71,41 +126,19 @@ class XMPPSessionPool(object):
         if self.push_sender is not None:
             self.push_sender.stop()
 
-
-class XMPPClientThread(threading.Thread):
-    """Threaded XMPP client"""
-    def __init__(self, client):
-        super(XMPPClientThread, self).__init__()
-        self.client = client
-        self.client.setup_connection()
-        self.keepRunning = True
-
-    def run(self):
-        while self.keepRunning:
-            try:
-                self.client.Process(1)
-            except xmpp.protocol.StreamError:
-                self.client.disconnect()
-
-        self.client.disconnect()
-
-    def stop(self):
-        self.keepRunning = False
-
-
 class IMClient(object):
-    def __init__(self,client_id,push_token=None,push_sender=None):
+    def __init__(self, client_id, push_token=None, push_sender=None):
         self.client_id = client_id
         self.sessions = {}
         self.push_token = push_token
         self.push_sender = push_sender
 
-    def start_session(self,jid,xmpp_client):
+    def start_session(self, jid, xmpp_client):
         if jid not in self.sessions:
-            self.sessions[jid] = XMPPSession(session_id=uuid.uuid4().hex, xmpp_client=xmpp_client,im_client=self)
+            self.sessions[jid] = XMPPSession(session_id=uuid.uuid4().hex, xmpp_client=xmpp_client, im_client=self)
         return self.sessions[jid]
 
-    def session_closed(self,session):
+    def session_closed(self, session):
         del self.sessions[session.jid]
 
     def push_notification(self,message=None,contact_name=None,contact_id=None,sound=True):
