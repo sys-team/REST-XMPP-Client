@@ -368,5 +368,7 @@ class ServerStatusHandler(XMPPClientHandler):
 
         response['memory'] = sizeof_fmt(process.get_memory_info()[0])
         response['threads'] = process.get_num_threads()
-        response['sessions'] = len(self.session_pool.session_pool.keys())
+        response['im_sessions'] = len(self.session_pool.session_pool.keys())
+        response['im_clients'] = len(self.session_pool.im_client_pool.keys())
+        response['xmpp_clients'] = len(self.session_pool.xmpp_client_pool.keys())
         self.write(response)
