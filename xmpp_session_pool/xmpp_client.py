@@ -131,18 +131,9 @@ class XMPPClient(xmpp.Client):
         else:
             return True
 
-    def disconnect(self):
+    def close(self):
         self.UnregisterDisconnectHandler(self.DisconnectHandler)
         self.Dispatcher.disconnect()
-
-        if 'TCPsocket' in self.__dict__:
-            sock = self.__dict__['TCPsocket']
-            try:
-                sock._sock.shutdown(socket.SHUT_RDWR)
-            except:
-                logging.debug(u'SessionEvent : Session %s socket shutdowned', self._User)
-            sock._sock.close()
-            sock.PlugOut()
 
     def register_events_observer(self,observer):
         self._event_observers.append(observer)
