@@ -9,6 +9,66 @@ from xmpp_client import XMPPClient
 from errors import XMPPAuthError
 import asyncore
 import logging
+from tornado import ioloop
+
+
+class XMPPTornadoIOLoopThread(threading.Thread):
+    def __init__(self):
+        super(XMPPTornadoIOLoopThread, self).__init__()
+        self.ioLoop = ioloop.IOLoop()
+        self.handlers = self.ioLoop.__dict__['_handlers']
+
+    def run(self):
+        self.ioLoop.make_current()
+        self.ioLoop.start()
+
+    def stop(self):
+        self.ioLoop.stop()
+
+    def add_handler(self, fd, handler, events):
+        print(len(self.handlers))
+        self.ioLoop.add_handler(fd, handler, events)
+
+    def remove_handler(self, fd):
+        self.ioLoop.remove_handler(fd)
+        if len(self.handlers) < 2:
+            self.stop()
+            
+
+class XMPPTornadoIOLoopDispatcher(object):
+
+    ioLoopThread = XMPPTornadoIOLoopThread()
+
+    def __init__(self, client):
+        super(XMPPTornadoIOLoopDispatcher, self).__init__()
+        self.client = client
+
+    def handle_read(self, fd, events):
+        try:
+            if self.client.isConnected():
+                self.client.Process()
+        except xmpp.protocol.StreamError:
+            self.client.close()
+        except Exception as e:
+            logging.exception(e)
+
+    def start(self):
+        if not XMPPTornadoIOLoopDispatcher.ioLoopThread.isAlive():
+            XMPPTornadoIOLoopDispatcher.ioLoopThread = XMPPTornadoIOLoopThread()
+            XMPPTornadoIOLoopDispatcher.ioLoopThread.start()
+            self.ioLoopThread = XMPPTornadoIOLoopDispatcher.ioLoopThread
+
+        if 'TCPsocket' in self.client.__dict__:
+            sock = self.client.__dict__['TCPsocket']._sock
+            self.ioLoopThread.add_handler(sock.fileno(), self.handle_read, self.ioLoopThread.ioLoop.READ)
+
+    def stop(self):
+        if 'TCPsocket' in self.client.__dict__:
+            sock = self.client.__dict__['TCPsocket']._sock
+            self.ioLoopThread.remove_handler(sock.fileno())
+
+        self.client.close()
+
 
 class XMPPAsyncoreDispatcher(asyncore.dispatcher):
     """Async XMPPClient dispatcher"""
@@ -77,7 +137,7 @@ class XMPPSessionPool(object):
         if jid not in self.xmpp_client_pool:
             xmpp_client = XMPPClient(jid=jid, password=password, server=server)
             xmpp_client.setup_connection()
-            xmpp_dispatcher = XMPPAsyncoreDispatcher(xmpp_client)
+            xmpp_dispatcher = XMPPTornadoIOLoopDispatcher(xmpp_client)
             xmpp_dispatcher.start()
 
             self.xmpp_client_pool[jid] = xmpp_dispatcher
