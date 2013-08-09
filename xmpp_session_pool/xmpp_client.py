@@ -2,7 +2,6 @@
 __author__ = 'v.kovtash@gmail.com'
 
 import xmpp
-import socket
 import logging
 from xmpp_roster import XMPPRoster
 from event_id import XMPPSessionEventID
@@ -10,14 +9,17 @@ from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSend
 from message_store import XMPPMessagesStore
 
 class XMPPClient(xmpp.Client):
-    def __init__(self,jid,password,server,port=5222):
+    def __init__(self, jid, password, server, port=5222):
         self.jid = xmpp.protocol.JID(jid)
         self._Password = password
         self._User = self.jid.getNode()
         self._Resource = self.jid.getResource()
         self._Server = (server,port)
-        self.Namespace,self.DBG='jabber:client',xmpp.client.DBG_CLIENT
-        xmpp.Client.__init__(self,self.jid.getDomain(),port,debug=[]) #['always', 'nodebuilder']
+        self.Namespace ='jabber:client'
+        self.DBG = xmpp.client.DBG_CLIENT
+        xmpp.Client.__init__(self,self.jid.getDomain(), port, debug=[])
+        self._DEBUG = xmpp.Debug.NoDebug()
+        self.DEBUG = self._DEBUG.Show
         self.id_generator = XMPPSessionEventID()
         self._event_observers = []
         self._connect_handlers = []
