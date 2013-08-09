@@ -248,10 +248,11 @@ class XMPPClient(xmpp.Client):
     @property
     def unread_count(self):
         unread_count = 0
+        chats_store = self.message_storage.chats_store
         for contact in self.roster.getRawRoster().values():
-            if (contact['id'] in self.message_storage.chats_store
-                and self.message_storage.chats_store[contact['id']][-1]['inbound']
-                and contact['read_offset'] < self.message_storage.chats_store[contact['id']][-1]['event_id']):
+            if (contact['id'] in chats_store
+                and chats_store[contact['id']][-1]['inbound']
+                and contact['read_offset'] < chats_store[contact['id']][-1]['event_id']):
                 unread_count += 1
 
         return unread_count
