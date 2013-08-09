@@ -81,10 +81,6 @@ class XMPPClient(xmpp.Client):
     def _xmpp_message_handler(self, con, event):
         jid_from = event.getFrom().getStripped()
         contact_id = self.roster.itemId(jid_from)
-
-        if contact_id is None:
-            return
-
         received = event.getTag('received')
         if received is not None: #delivery report received
             message_id = received.getAttr('id')
