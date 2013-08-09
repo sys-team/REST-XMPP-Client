@@ -111,7 +111,7 @@ class APNWSGINotification(threading.Thread, NotificationAbstract):
 
 
 class PyAPNSNotification(threading.Thread, NotificationAbstract):
-    def __init__(self, host, app_id, cert_file, dev_mode = False, reconnect_interval=10):
+    def __init__(self, host, app_id, cert_file, dev_mode = False, reconnect_interval=10, chunk_size=10):
         super(PyAPNSNotification, self).__init__()
         self.keepRunning = True
         self.is_server_ready = False
@@ -120,6 +120,7 @@ class PyAPNSNotification(threading.Thread, NotificationAbstract):
         self.reconnect_interval = reconnect_interval
         self.app_id = app_id
         self.cert_file = cert_file
+        self.chunk_size = chunk_size
         if  dev_mode:
             self.mode = 'sandbox'
         else:
@@ -139,15 +140,24 @@ class PyAPNSNotification(threading.Thread, NotificationAbstract):
                     else:
                         break
 
-            notification = self.notifications.get()
-            if notification is not None:
-                try:
-                    pyapns_client.notify(self.app_id, notification['token'], notification['message'])
-                except Exception:
-                    self.is_server_ready = False
-                    self.notifications.put(notification)
-
+            tokens = []
+            messages = []
+            for i in xrange(self.chunk_size):
+                if self.notifications.empty() and len(tokens):
+                    break
+                notification = self.notifications.get()
+                if notification is not None:
+                    tokens.append(notification['token'])
+                    messages.append(notification['message'])
                 self.notifications.task_done()
+
+            try:
+                if len(tokens):
+                    pyapns_client.notify(self.app_id, tokens, messages)
+            except Exception:
+                self.is_server_ready = False
+                for i in xrange(len(tokens)):
+                    self.notifications.put({'token':tokens[i],'message':messages[i]})
 
     def stop(self):
         self.keepRunning = False
