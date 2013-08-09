@@ -1,6 +1,5 @@
 __author__ = 'kovtash'
 
-import asyncore
 import logging
 from tornado import ioloop
 import threading
@@ -20,7 +19,6 @@ class XMPPTornadoIOLoopThread(threading.Thread):
         self.ioLoop.stop()
 
     def add_handler(self, fd, handler, events):
-        print(len(self.handlers))
         self.ioLoop.add_handler(fd, handler, events)
 
     def remove_handler(self, fd):
@@ -36,11 +34,31 @@ class XMPPTornadoIOLoopDispatcher(object):
     def __init__(self, client):
         super(XMPPTornadoIOLoopDispatcher, self).__init__()
         self.client = client
+        self.current_sock = None
+        client.RegisterConnectHandler(self._connected)
+        client.RegisterDisconnectHandler(self._disconnected)
+
+    def _connected(self):
+        sock = None
+        if 'TCPsocket' in self.client.__dict__:
+            sock = self.client.__dict__['TCPsocket']._sock.fileno()
+
+        if self.current_sock is not None and sock is not None and self.current_sock != sock:
+            self.ioLoopThread.remove_handler(self.current_sock)
+
+        self.current_sock = sock
+
+        if  self.current_sock is not None:
+            self.ioLoopThread.add_handler(self.current_sock, self.handle_read, self.ioLoopThread.ioLoop.READ)
+
+    def _disconnected(self):
+        if self.current_sock is not None:
+            self.ioLoopThread.remove_handler(self.current_sock)
+        self.current_sock = None
 
     def handle_read(self, fd, events):
         try:
-            if self.client.isConnected():
-                self.client.Process()
+            self.client.Process()
         except xmpp.protocol.StreamError:
             self.client.close()
         except Exception as e:
@@ -52,15 +70,9 @@ class XMPPTornadoIOLoopDispatcher(object):
             XMPPTornadoIOLoopDispatcher.ioLoopThread.start()
             self.ioLoopThread = XMPPTornadoIOLoopDispatcher.ioLoopThread
 
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']._sock
-            self.ioLoopThread.add_handler(sock.fileno(), self.handle_read, self.ioLoopThread.ioLoop.READ)
+        self._connected()
 
     def stop(self):
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']._sock
-            self.ioLoopThread.remove_handler(sock.fileno())
-
         self.client.close()
 
 class XMPPTornadoMainIOLoopDispatcher(object):
@@ -68,59 +80,41 @@ class XMPPTornadoMainIOLoopDispatcher(object):
         super(XMPPTornadoMainIOLoopDispatcher, self).__init__()
         self.client = client
         self.ioLoop = ioloop.IOLoop.instance()
+        self.current_sock = None
+        client.RegisterConnectHandler(self._connected)
+        client.RegisterDisconnectHandler(self._disconnected)
+
+    def _connected(self):
+        sock = None
+        if 'TCPsocket' in self.client.__dict__:
+            sock = self.client.__dict__['TCPsocket']._sock.fileno()
+
+        if self.current_sock is not None and sock is not None and self.current_sock != sock:
+            self.ioLoop.remove_handler(self.current_sock)
+
+        self.current_sock = sock
+
+        if  self.current_sock is not None:
+            self.ioLoop.add_handler(self.current_sock, self.handle_read, self.ioLoop.READ)
+
+    def _disconnected(self):
+        if self.current_sock is not None:
+            self.ioLoop.remove_handler(self.current_sock)
+        self.current_sock = None
 
     def handle_read(self, fd, events):
         try:
-            if self.client.isConnected():
-                self.client.Process()
+            self.client.Process()
         except xmpp.protocol.StreamError:
             self.client.close()
         except Exception as e:
             logging.exception(e)
 
     def start(self):
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']._sock
-            self.ioLoop.add_handler(sock.fileno(), self.handle_read, self.ioLoop.READ)
-
-    def stop(self):
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']._sock
-            self.ioLoop.remove_handler(sock.fileno())
-
-        self.client.close()
-
-
-class XMPPAsyncoreDispatcher(asyncore.dispatcher):
-    """Async XMPPClient dispatcher"""
-
-    ioLoopThread = threading.Thread(target=asyncore.loop)
-
-    def __init__(self, client):
-        self.client = client
-        if 'TCPsocket' in self.client.__dict__:
-            asyncore.dispatcher.__init__(self, self.client.__dict__['TCPsocket']._sock)
-
-    def handle_read(self):
-        try:
-            if self.client.isConnected():
-                self.client.Process()
-        except xmpp.protocol.StreamError:
-            self.close()
-        except Exception as e:
-            logging.exception(e)
-
-    def handle_close(self):
-        self.close()
-
-    def start(self):
-        if not XMPPAsyncoreDispatcher.ioLoopThread.isAlive():
-            XMPPAsyncoreDispatcher.ioLoopThread = threading.Thread(target=asyncore.loop)
-            XMPPAsyncoreDispatcher.ioLoopThread.start()
+        self._connected()
 
     def stop(self):
         self.client.close()
-        self.close()
 
 
 class XMPPThreadedDispatcher(threading.Thread):
