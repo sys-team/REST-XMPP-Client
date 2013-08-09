@@ -1,6 +1,5 @@
 __author__ = 'v.kovtash@gmail.com'
 
-from r2x_bottle_app import BottleApp
 from r2x_tornado_app import TornadoApp
 import logging
 import logging.handlers
