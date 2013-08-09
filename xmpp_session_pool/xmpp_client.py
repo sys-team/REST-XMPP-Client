@@ -20,6 +20,18 @@ class XMPPClient(xmpp.Client):
         xmpp.Client.__init__(self,self.jid.getDomain(),port,debug=[]) #['always', 'nodebuilder']
         self.id_generator = XMPPSessionEventID()
         self._event_observers = []
+        self._connect_handlers = []
+
+    def RegisterConnectHandler(self, handler):
+        """ Register handler that will be called on connect."""
+        self._connect_handlers.append(handler)
+
+    def UnregisterConnectHandler(self, handler):
+        """ Unregister handler that will be called on connect."""
+        self._connect_handlers.remove(handler)
+
+    def _connected(self):
+        for i in self._connect_handlers: i()
 
     def reconnectAndReauth(self):
         """ Example of reconnection method. In fact, it can be used to batch connection and auth as well. """
@@ -43,6 +55,7 @@ class XMPPClient(xmpp.Client):
     def DisconnectHandler(self):
         while not self.isConnected():
             self.reconnectAndReauth()
+        self._connected()
         self.sendInitPresence()
         self.getRoster()
 
@@ -100,6 +113,8 @@ class XMPPClient(xmpp.Client):
 
             if not self.isConnected() or con is None:
                 raise XMPPConnectionError(self.Server)
+
+            self._connected()
 
             auth = self.auth(self._User,self._Password,self._Resource)
             if not auth:
