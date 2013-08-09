@@ -14,6 +14,7 @@ class XMPPRoster(xmpp.roster.Roster):
         self.default_priority = 0
         self.self_jid = None
         self.id_generator = id_generator
+        self._jid_to_id_mapping = {}
 
     def plugin(self,owner,request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
@@ -26,8 +27,12 @@ class XMPPRoster(xmpp.roster.Roster):
         self.self_jid = self.self_jid.lower()
         if request: self.Request()
 
-    def itemId(self,jid):
-        return uuid.uuid3(self.uuid_namespace,jid.lower().encode('utf8')).hex
+    def itemId(self, jid):
+        contact_id = self._jid_to_id_mapping.get(jid, None)
+        if contact_id is None:
+            contact_id = uuid.uuid3(self.uuid_namespace,jid.lower().encode('utf8')).hex
+            self._jid_to_id_mapping[jid] = contact_id
+        return contact_id
 
     def _new_roster_item(self,jid):
         item_id = self.itemId(jid)
