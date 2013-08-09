@@ -19,34 +19,38 @@ class XMPPMessagesStore(PlugIn):
        Also request roster from server if the 'request' argument is set.
        Used internally."""
         self._owner.Dispatcher.RegisterHandler('message', self.xmpp_message_handler)
+        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_delivery_status_handler, ns='urn:xmpp:receipts')
 
     def xmpp_message_handler(self, con, event):
+        message_text = event.getBody()
+        if message_text is None: return
+
         jid_from = event.getFrom().getStripped()
         contact_id = self._owner.getRoster().itemId(jid_from)
         contact = self._owner.getRoster().getItem(contact_id)
-        message_text = event.getBody()
-        message_id = None
+        if contact is None: return
+
+        message_id = event.getID()
+        if message_id is None:
+            message_id = self.id_generator.id()
+
         delivery_receipt_asked = False
-        requests = event.getTags('request')
+        if  event.getID() is not None and event.getTag('request') is not None:
+            delivery_receipt_asked = True
+
+        self.append_message(contact_id=contact_id, inbound=True, text=message_text, message_id=message_id, delivery_receipt_asked = delivery_receipt_asked)
+
+    def xmpp_delivery_status_handler(self, con, event):
         received = event.getTag('received')
-
-        for request in requests:
-            if request.getAttr('xmlns') == 'urn:xmpp:receipts':
-                message_id = event.getID()
-                if  message_id is not None:
-                    delivery_receipt_asked = True
-
         if received is not None:
             message_id = received.getAttr('id')
+            jid_from = event.getFrom().getStripped()
+            contact_id = self._owner.getRoster().itemId(jid_from)
             if message_id is not None and contact_id in self.chats_store:
                 for message in self.chats_store[contact_id]:
                     if not message['inbound'] and message['message_id'] == message_id:
                         message['delivered'] = True
                         message['event_id'] = self.id_generator.id()
-            return
-
-        if  message_text is not None and contact is not None:
-            self.append_message(contact_id=contact_id, inbound=True, text=message_text, message_id=message_id, delivery_receipt_asked = delivery_receipt_asked)
 
     def append_message(self, contact_id, inbound, text, message_id = None, delivery_receipt_asked=False):
         if contact_id not in self.chats_store:
