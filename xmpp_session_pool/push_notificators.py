@@ -145,10 +145,15 @@ class PyAPNSNotification(threading.Thread, NotificationAbstract):
             for i in xrange(self.chunk_size):
                 if self.notifications.empty() and len(tokens):
                     break
+
                 notification = self.notifications.get()
-                if notification is not None:
-                    tokens.append(notification['token'])
-                    messages.append(notification['message'])
+
+                if notification is None:
+                    self.notifications.task_done()
+                    break
+
+                tokens.append(notification['token'])
+                messages.append(notification['message'])
                 self.notifications.task_done()
 
             try:
