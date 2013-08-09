@@ -10,12 +10,14 @@ class XMPPTornadoIOLoopThread(threading.Thread):
         super(XMPPTornadoIOLoopThread, self).__init__()
         self.ioLoop = ioloop.IOLoop()
         self.handlers = self.ioLoop.__dict__['_handlers']
+        self.daemon = True
 
     def run(self):
         self.ioLoop.make_current()
         self.ioLoop.start()
 
     def stop(self):
+        logging.info('DispatcherEvent : stopping ioloop')
         self.ioLoop.stop()
 
     def add_handler(self, fd, handler, events):
