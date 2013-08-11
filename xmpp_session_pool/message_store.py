@@ -6,10 +6,9 @@ from xmpp.client import PlugIn
 import itertools
 
 class XMPPMessagesStore(PlugIn):
-    def __init__(self, id_generator, max_message_size = 512, chat_buffer_size=50):
+    def __init__(self, id_generator, chat_buffer_size=50):
         PlugIn.__init__(self)
         self.id_generator = id_generator
-        self.max_message_size = max_message_size
         self.chat_buffer_size = chat_buffer_size
         self.chats_store = {}
         self.DBG_LINE = 'message_store'
@@ -59,17 +58,17 @@ class XMPPMessagesStore(PlugIn):
         messages = []
         event_id = self.id_generator.id()
         timestamp = time.time()
-        for i in xrange(0, len(text), self.max_message_size):
-            messages.append({'event_id':event_id,
-                             'inbound':inbound,
-                             'text':text[i:i+self.max_message_size],
-                             'timestamp':timestamp,
-                             'contact_id':contact_id,
-                             'chunk_id': i,
-                             'message_id': message_id,
-                             'delivered':False,
-                             'delivery_receipt_asked':delivery_receipt_asked
-            })
+
+        messages.append({'event_id':event_id,
+                         'inbound':inbound,
+                         'text':text,
+                         'timestamp':timestamp,
+                         'contact_id':contact_id,
+                         'chunk_id': 0,
+                         'message_id': message_id,
+                         'delivered':False,
+                         'delivery_receipt_asked':delivery_receipt_asked
+        })
 
         for message in messages:
             self.chats_store[contact_id].append(message)
