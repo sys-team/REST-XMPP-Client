@@ -5,13 +5,17 @@ import urllib
 import urllib2
 from urllib2 import URLError, HTTPError
 from Queue import Queue
-import json
 import threading
 from multiprocessing import Process
 import multiprocessing
 import os.path
 import pyapns_client
 import time
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 class NotificationAbstract(object):
     def start(self):
@@ -53,10 +57,10 @@ class NotificationAbstract(object):
             aps_message['im'] = {}
             aps_message['im']['contact_id'] = contact_id
 
-        payload = json.dumps(aps_message, separators = (',', ':'), ensure_ascii = False).encode('utf-8')
-        max_payload_len = 250 - len(payload)
-
         if  full_message is not None:
+            payload = json.dumps(aps_message, ensure_ascii = False).encode('utf-8')
+            max_payload_len = 250 - len(payload)
+
             if  len(full_message) > max_message_len:
                 full_message = full_message[:max_message_len] + message_cut_end
 

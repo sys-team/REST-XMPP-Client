@@ -81,17 +81,19 @@ class XMPPClient(xmpp.Client):
         self.post_contacts_notification()
 
     def _xmpp_message_handler(self, con, event):
-        jid_from = event.getFrom().getStripped()
-        contact_id = self.roster.itemId(jid_from)
-        received = event.getTag('received')
-        if received is not None: #delivery report received
-            message_id = received.getAttr('id')
-            if message_id is not None:
-                self.post_delivery_report_notification(contact_id, message_id)
+        message_text = event.getBody()
+        if message_text is not None:
+            jid_from = event.getFrom().getStripped()
+            contact_id = self.roster.itemId(jid_from)
+            self.post_message_notification(contact_id, message_text, inbound=True)
         else:
-            message_text = event.getBody()
-            if message_text is not None:
-                self.post_message_notification(contact_id, message_text, inbound=True)
+            received = event.getTag('received')
+            if received is not None: #delivery report received
+                message_id = received.getAttr('id')
+                if message_id is not None:
+                    jid_from = event.getFrom().getStripped()
+                    contact_id = self.roster.itemId(jid_from)
+                    self.post_delivery_report_notification(contact_id, message_id)
 
     @property
     def roster(self):
@@ -120,18 +122,18 @@ class XMPPClient(xmpp.Client):
 
             self.message_storage #Create message storage and register its handlers before registering self handlers
 
-            self.Dispatcher.RegisterHandler('presence',self._xmpp_presence_handler)
-            self.Dispatcher.RegisterHandler('iq',self._xmpp_presence_handler,'set',xmpp.protocol.NS_ROSTER)
-            self.Dispatcher.RegisterHandler('message',self._xmpp_message_handler)
+            self.Dispatcher.RegisterHandler('presence', self._xmpp_presence_handler)
+            self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler,'set', xmpp.protocol.NS_ROSTER)
+            self.Dispatcher.RegisterHandler('message', self._xmpp_message_handler)
             self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
 
             self.sendInitPresence()
             self.getRoster()
 
-    def check_credentials(self,jid,password):
+    def check_credentials(self, jid, password):
         jid = xmpp.protocol.JID(jid)
         user = jid.getNode()
-        client = xmpp.Client(jid.getDomain(),self.Port,debug=[])
+        client = xmpp.Client(jid.getDomain(), self.Port,debug=[])
         con = client.connect(server=self._Server)
 
         if not client.isConnected() or con is None:
