@@ -105,7 +105,6 @@ class XMPPClient(xmpp.Client):
             XMPPMessagesStore(self.id_generator).PlugIn(self)
         return self.XMPPMessagesStore
 
-
     def setup_connection(self):
         if not self.isConnected():
             logging.debug('SessionEvent : Session %s Setup connection',self.jid)
@@ -199,13 +198,13 @@ class XMPPClient(xmpp.Client):
                 payload=[delivery_receipt_request])
 
             logging.debug(u"XMPPEvent : %s"%message_stanza)
+            contact_id = self.getRoster().itemId(jid)
             message_id = self.send(message_stanza)
             if not id:
                 raise XMPPSendError()
 
-            contact_id = self.getRoster().itemId(jid)
             result = self.message_storage.append_message(contact_id=contact_id, inbound=False, text=message, message_id=message_id)
-            self.post_message_notification(None, message, inbound=False)
+            self.post_message_notification(contact_id=contact_id, message_text=message, inbound=False)
             return result
         else:
             raise XMPPSendError()
