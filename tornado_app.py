@@ -1,7 +1,8 @@
 __author__ = 'kovtash'
 
-from tornado import web, gen
+from tornado import web, gen, ioloop
 from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError
+from datetime import timedelta
 import json
 import psutil
 import os
@@ -256,10 +257,14 @@ class SessionFeedHandler(XMPPClientHandler):
         if (not (len(self.response['contacts'])+len(self.response['messages'])) and should_wait):
             session.wait_for_notification(callback = (yield gen.Callback("notification")))
             yield gen.Wait("notification")
+            session = self.get_session(session_id)
+            self.response['contacts'] = session.contacts(event_offset=offset)
+            self.response['messages'] = session.messages(event_offset=offset)
+            #timeout added for requests synchronization
+            #all post and put requests should return result earlier than polling request
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
+            yield gen.Wait("wait")
 
-        session = self.get_session(session_id)
-        self.response['contacts'] = session.contacts(event_offset=offset)
-        self.response['messages'] = session.messages(event_offset=offset)
         self.write(self.response)
         self.finish()
 
