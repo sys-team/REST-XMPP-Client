@@ -17,8 +17,8 @@ class XMPPMessagesStore(PlugIn):
         """ Register presence and subscription trackers in the owner's dispatcher.
        Also request roster from server if the 'request' argument is set.
        Used internally."""
-        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_message_handler)
-        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_delivery_status_handler, ns='urn:xmpp:receipts')
+        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_message_handler, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_delivery_status_handler, ns='urn:xmpp:receipts', makefirst=True)
 
     def xmpp_message_handler(self, con, event):
         message_text = event.getBody()
@@ -64,7 +64,6 @@ class XMPPMessagesStore(PlugIn):
                          'text':text,
                          'timestamp':timestamp,
                          'contact_id':contact_id,
-                         'chunk_id': 0,
                          'message_id': message_id,
                          'delivered':False,
                          'delivery_receipt_asked':delivery_receipt_asked

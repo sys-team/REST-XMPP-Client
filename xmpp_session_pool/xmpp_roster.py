@@ -20,10 +20,10 @@ class XMPPRoster(xmpp.roster.Roster):
         """ Register presence and subscription trackers in the owner's dispatcher.
         Also request roster from server if the 'request' argument is set.
         Used internally."""
-        self._owner.Dispatcher.RegisterHandler('iq',self.RosterIqHandler,'result',xmpp.protocol.NS_ROSTER)
-        self._owner.Dispatcher.RegisterHandler('iq',self.RosterIqHandler,'set',xmpp.protocol.NS_ROSTER)
-        self._owner.Dispatcher.RegisterHandler('presence',self.PresenceHandler)
-        self.self_jid = ''.join([self._owner.User,'@',self._owner.Server])
+        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler,'result', xmpp.protocol.NS_ROSTER, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler,'set', xmpp.protocol.NS_ROSTER, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('presence', self.PresenceHandler, makefirst=True)
+        self.self_jid = ''.join([self._owner.User,'@', self._owner.Server])
         self.self_jid = self.self_jid.lower()
         if request: self.Request()
 
