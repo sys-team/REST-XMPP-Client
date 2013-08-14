@@ -206,23 +206,22 @@ class SessionContactsHandler(XMPPClientHandler):
 
         contact = json_body['contact']
         session = self.get_session(session_id)
-        contact_added = yield self.async_worker.submit(self.add_contact, session, contact.get('jid'), contact.get('name'))
+        jid = contact.get('jid')
+        contact_added = yield self.async_worker.submit(session.add_contact, jid, contact.get('name'))
+
+        timeout = 5.0
+        while timeout and contact_added is None:
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
+            yield gen.Wait("wait")
+            timeout -= 0.5
+            contact_added = session.contact_by_jid(jid)
+
         if contact_added is not None:
             self.response['contacts'] = [contact_added]
         else:
-            self.raise_contact_error(contact.get('jid'))
+            self.raise_contact_error(jid)
 
         self.write(self.response)
-
-    def add_contact(self, session, jid, name):
-        session.add_contact(jid, name)
-        timeout = 5.0
-        contact_added = session.contact_by_jid(jid)
-        while timeout and contact_added is None:
-            time.sleep(0.5)
-            timeout -= 0.5
-            contact_added = session.contact_by_jid(jid)
-        return contact_added
 
 
 class SessionMessagesHandler(XMPPClientHandler):
