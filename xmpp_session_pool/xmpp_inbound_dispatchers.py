@@ -4,6 +4,7 @@ import logging
 from tornado import ioloop
 import threading
 import xmpp
+from errors import XMPPConnectionError
 
 class XMPPTornadoIOLoopThread(threading.Thread):
     def __init__(self):
@@ -41,22 +42,26 @@ class XMPPTornadoIOLoopDispatcher(object):
         client.RegisterDisconnectHandler(self._disconnected)
 
     def _connected(self):
-        sock = None
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']._sock.fileno()
-
-        if self.current_sock is not None and sock is not None and self.current_sock != sock:
+        if self.current_sock is not None:
             self.ioLoopThread.remove_handler(self.current_sock)
 
-        self.current_sock = sock
+        if 'TCPsocket' in self.client.__dict__:
+            try:
+                self.current_sock = self.client.__dict__['TCPsocket']._sock.fileno()
+            except AttributeError:
+                self.stop()
+                raise XMPPConnectionError
 
         if  self.current_sock is not None:
             self.ioLoopThread.add_handler(self.current_sock, self.handle_read, self.ioLoopThread.ioLoop.READ)
 
     def _disconnected(self):
         if self.current_sock is not None:
-            self.ioLoopThread.remove_handler(self.current_sock)
-        self.current_sock = None
+            try:
+                self.ioLoopThread.remove_handler(self.current_sock)
+            except KeyError:
+                pass
+            self.current_sock = None
 
     def handle_read(self, fd, events):
         try:
@@ -87,14 +92,15 @@ class XMPPTornadoMainIOLoopDispatcher(object):
         client.RegisterDisconnectHandler(self._disconnected)
 
     def _connected(self):
-        sock = None
-        if 'TCPsocket' in self.client.__dict__:
-            sock = self.client.__dict__['TCPsocket']._sock.fileno()
-
-        if self.current_sock is not None and sock is not None and self.current_sock != sock:
+        if self.current_sock is not None:
             self.ioLoop.remove_handler(self.current_sock)
 
-        self.current_sock = sock
+        if 'TCPsocket' in self.client.__dict__:
+            try:
+                self.current_sock = self.client.__dict__['TCPsocket']._sock.fileno()
+            except AttributeError:
+                self.stop()
+                raise XMPPConnectionError
 
         if  self.current_sock is not None:
             self.ioLoop.add_handler(self.current_sock, self.handle_read, self.ioLoop.READ)
@@ -102,7 +108,7 @@ class XMPPTornadoMainIOLoopDispatcher(object):
     def _disconnected(self):
         if self.current_sock is not None:
             self.ioLoop.remove_handler(self.current_sock)
-        self.current_sock = None
+            self.current_sock = None
 
     def handle_read(self, fd, events):
         try:
