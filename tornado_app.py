@@ -260,11 +260,6 @@ class SessionFeedHandler(XMPPClientHandler):
             session = self.get_session(session_id)
             self.response['contacts'] = session.contacts(event_offset=offset)
             self.response['messages'] = session.messages(event_offset=offset)
-            #timeout added for requests synchronization
-            #all post and put requests should return result earlier than polling request
-            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
-            yield gen.Wait("wait")
-
         self.write(self.response)
         self.finish()
 

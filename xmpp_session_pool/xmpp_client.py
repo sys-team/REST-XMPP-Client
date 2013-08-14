@@ -183,12 +183,12 @@ class XMPPClient(xmpp.Client):
             if callable(unread_count_updated_notification):
                 unread_count_updated_notification()
 
-    def messages(self,contact_ids=None,event_offset=None):
+    def messages(self, contact_ids=None, event_offset=None):
         return self.message_storage.messages(contact_ids=contact_ids, event_offset=event_offset)
 
-    def send_message(self,contact_id,message):
+    def send_message(self, contact_id, message):
         jid = self.roster.getItem(contact_id)['jid']
-        return self.send_message_by_jid(jid,message)
+        return self.send_message_by_jid(jid, message)
 
     def send_message_by_jid(self, jid, message):
         if self.isConnected():
