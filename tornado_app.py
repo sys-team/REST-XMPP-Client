@@ -6,21 +6,12 @@ from datetime import timedelta
 import json
 import psutil
 import os
-import time
 
 
 class MainHandler(web.RequestHandler):
-    def initialize(self, async_worker):
-        self.async_worker = async_worker
-
     @gen.coroutine
-    def get(self):
-        result = yield self.async_worker.submit(self.work, 'Done')
-        self.write(result)
-
-    def work(self,message):
-        time.sleep(10)
-        return message
+    def head(self):
+        pass
 
 
 class XMPPClientHandler(web.RequestHandler):
