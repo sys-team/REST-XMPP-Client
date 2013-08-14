@@ -23,6 +23,7 @@ class XMPPClient(xmpp.Client):
         self.id_generator = XMPPSessionEventID()
         self._event_observers = []
         self._connect_handlers = []
+        self.error_state = False
 
     def RegisterConnectHandler(self, handler):
         """ Register handler that will be called on connect."""
@@ -55,11 +56,16 @@ class XMPPClient(xmpp.Client):
         return self.connected
 
     def DisconnectHandler(self):
-        while not self.isConnected():
+        retry_count = 5
+        while not self.isConnected() and retry_count:
             self.reconnectAndReauth()
-        self._connected()
-        self.sendInitPresence()
-        self.getRoster()
+            retry_count -= 1
+        if  self.isConnected():
+            self._connected()
+            self.sendInitPresence()
+            self.getRoster()
+        else:
+            self.close()
 
     def getRoster(self):
         """ Return the Roster instance, previously plugging it in and
@@ -79,6 +85,14 @@ class XMPPClient(xmpp.Client):
 
     def _xmpp_presence_handler(self, con, event):
         self.post_contacts_notification()
+
+    def _xmpp_error_handler(self, con, event):
+        logging.debug(u'XMPPError : %s ',event)
+        error = event.getTag('error')
+        error_code = int(error.getAttr('code'))
+        if error_code >= 500 and error_code < 600:
+            self.error_state = True
+            self.close()
 
     def _xmpp_message_handler(self, con, event):
         message_text = event.getBody()
@@ -125,9 +139,17 @@ class XMPPClient(xmpp.Client):
             self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler,'set', xmpp.protocol.NS_ROSTER)
             self.Dispatcher.RegisterHandler('message', self._xmpp_message_handler)
             self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
+            self.Dispatcher.RegisterHandler('iq', self._xmpp_error_handler,'error', xmpp.protocol.NS_ROSTER)
 
-            self.sendInitPresence()
-            self.getRoster()
+            if not self.error_state:
+                self.sendInitPresence()
+            else:
+                raise XMPPConnectionError(self.Server)
+
+            if not self.error_state:
+                self.getRoster()
+            else:
+                raise XMPPConnectionError(self.Server)
 
     def check_credentials(self, jid, password):
         jid = xmpp.protocol.JID(jid)
