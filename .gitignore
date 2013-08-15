@@ -42,4 +42,5 @@ pypy/
 .idea/
 
 #Certificates
-certificates/
+certificates/*
+!certificates/.gitkeep
