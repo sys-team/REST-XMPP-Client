@@ -2,7 +2,6 @@
 __author__ = 'v.kovtash@gmail.com'
 
 import xmpp
-import socket
 import logging
 from xmpp_roster import XMPPRoster
 from event_id import XMPPSessionEventID
@@ -10,16 +9,32 @@ from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSend
 from message_store import XMPPMessagesStore
 
 class XMPPClient(xmpp.Client):
-    def __init__(self,jid,password,server,port=5222):
+    def __init__(self, jid, password, server, port=5222):
         self.jid = xmpp.protocol.JID(jid)
         self._Password = password
         self._User = self.jid.getNode()
         self._Resource = self.jid.getResource()
         self._Server = (server,port)
-        self.Namespace,self.DBG='jabber:client',xmpp.client.DBG_CLIENT
-        xmpp.Client.__init__(self,self.jid.getDomain(),port,debug=[]) #['always', 'nodebuilder']
+        self.Namespace ='jabber:client'
+        self.DBG = xmpp.client.DBG_CLIENT
+        xmpp.Client.__init__(self,self.jid.getDomain(), port, debug=[])
+        self._DEBUG = xmpp.Debug.NoDebug()
+        self.DEBUG = self._DEBUG.Show
         self.id_generator = XMPPSessionEventID()
         self._event_observers = []
+        self._connect_handlers = []
+        self.error_state = False
+
+    def RegisterConnectHandler(self, handler):
+        """ Register handler that will be called on connect."""
+        self._connect_handlers.append(handler)
+
+    def UnregisterConnectHandler(self, handler):
+        """ Unregister handler that will be called on connect."""
+        self._connect_handlers.remove(handler)
+
+    def _connected(self):
+        for i in self._connect_handlers: i()
 
     def reconnectAndReauth(self):
         """ Example of reconnection method. In fact, it can be used to batch connection and auth as well. """
@@ -41,10 +56,16 @@ class XMPPClient(xmpp.Client):
         return self.connected
 
     def DisconnectHandler(self):
-        while not self.isConnected():
+        retry_count = 5
+        while not self.isConnected() and retry_count:
             self.reconnectAndReauth()
-        self.sendInitPresence()
-        self.getRoster()
+            retry_count -= 1
+        if  self.isConnected():
+            self._connected()
+            self.sendInitPresence()
+            self.getRoster()
+        else:
+            self.close()
 
     def getRoster(self):
         """ Return the Roster instance, previously plugging it in and
@@ -65,11 +86,28 @@ class XMPPClient(xmpp.Client):
     def _xmpp_presence_handler(self, con, event):
         self.post_contacts_notification()
 
+    def _xmpp_error_handler(self, con, event):
+        logging.debug(u'XMPPError : %s ',event)
+        error = event.getTag('error')
+        error_code = int(error.getAttr('code'))
+        if error_code >= 500 and error_code < 600:
+            self.error_state = True
+            self.close()
+
     def _xmpp_message_handler(self, con, event):
-        jid_from = event.getFrom().getStripped()
-        contact_id = self.roster.itemId(jid_from)
         message_text = event.getBody()
-        self.post_message_notification(contact_id,message_text,inbound=True)
+        if message_text is not None:
+            jid_from = event.getFrom().getStripped()
+            contact_id = self.roster.itemId(jid_from)
+            self.post_message_notification(contact_id, message_text, inbound=True)
+        else:
+            received = event.getTag('received')
+            if received is not None: #delivery report received
+                message_id = received.getAttr('id')
+                if message_id is not None:
+                    jid_from = event.getFrom().getStripped()
+                    contact_id = self.roster.itemId(jid_from)
+                    self.post_delivery_report_notification(contact_id, message_id)
 
     @property
     def roster(self):
@@ -81,7 +119,6 @@ class XMPPClient(xmpp.Client):
             XMPPMessagesStore(self.id_generator).PlugIn(self)
         return self.XMPPMessagesStore
 
-
     def setup_connection(self):
         if not self.isConnected():
             logging.debug('SessionEvent : Session %s Setup connection',self.jid)
@@ -90,24 +127,34 @@ class XMPPClient(xmpp.Client):
             if not self.isConnected() or con is None:
                 raise XMPPConnectionError(self.Server)
 
+            self._connected()
+
             auth = self.auth(self._User,self._Password,self._Resource)
             if not auth:
                 raise XMPPAuthError()
 
             self.message_storage #Create message storage and register its handlers before registering self handlers
 
-            self.Dispatcher.RegisterHandler('presence',self._xmpp_presence_handler)
-            self.Dispatcher.RegisterHandler('iq',self._xmpp_presence_handler,'set',xmpp.protocol.NS_ROSTER)
-            self.Dispatcher.RegisterHandler('message',self._xmpp_message_handler)
+            self.Dispatcher.RegisterHandler('presence', self._xmpp_presence_handler)
+            self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler,'set', xmpp.protocol.NS_ROSTER)
+            self.Dispatcher.RegisterHandler('message', self._xmpp_message_handler)
             self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
+            self.Dispatcher.RegisterHandler('iq', self._xmpp_error_handler,'error', xmpp.protocol.NS_ROSTER)
 
-            self.sendInitPresence()
-            self.getRoster()
+            if not self.error_state:
+                self.sendInitPresence()
+            else:
+                raise XMPPConnectionError(self.Server)
 
-    def check_credentials(self,jid,password):
+            if not self.error_state:
+                self.getRoster()
+            else:
+                raise XMPPConnectionError(self.Server)
+
+    def check_credentials(self, jid, password):
         jid = xmpp.protocol.JID(jid)
         user = jid.getNode()
-        client = xmpp.Client(jid.getDomain(),self.Port,debug=[])
+        client = xmpp.Client(jid.getDomain(), self.Port,debug=[])
         con = client.connect(server=self._Server)
 
         if not client.isConnected() or con is None:
@@ -120,18 +167,9 @@ class XMPPClient(xmpp.Client):
         else:
             return True
 
-    def disconnect(self):
+    def close(self):
         self.UnregisterDisconnectHandler(self.DisconnectHandler)
         self.Dispatcher.disconnect()
-
-        if 'TCPsocket' in self.__dict__:
-            sock = self.__dict__['TCPsocket']
-            try:
-                sock._sock.shutdown(socket.SHUT_RDWR)
-            except:
-                logging.debug(u'SessionEvent : Session %s socket shutdowned', self._User)
-            sock._sock.close()
-            sock.PlugOut()
 
     def register_events_observer(self,observer):
         self._event_observers.append(observer)
@@ -143,11 +181,17 @@ class XMPPClient(xmpp.Client):
     def observers_count(self):
         return len(self._event_observers)
 
-    def post_message_notification(self,contact_id,message_text,inbound=True):
+    def post_message_notification(self, contact_id, message_text, inbound=True):
         for observer in self._event_observers:
             message_appended_notification = getattr(observer, 'message_appended_notification', None)
             if callable(message_appended_notification):
-                message_appended_notification(contact_id,message_text,inbound)
+                message_appended_notification(contact_id, message_text, inbound)
+
+    def post_delivery_report_notification(self, contact_id, message_id):
+        for observer in self._event_observers:
+            message_appended_notification = getattr(observer, 'message_delivered_notification', None)
+            if callable(message_appended_notification):
+                message_appended_notification(contact_id, message_id)
 
     def post_contacts_notification(self):
         for observer in self._event_observers:
@@ -161,25 +205,45 @@ class XMPPClient(xmpp.Client):
             if callable(unread_count_updated_notification):
                 unread_count_updated_notification()
 
-    def messages(self,contact_ids=None,event_offset=None):
+    def messages(self, contact_ids=None, event_offset=None):
         return self.message_storage.messages(contact_ids=contact_ids, event_offset=event_offset)
 
-    def send_message(self,contact_id,message):
+    def send_message(self, contact_id, message):
         jid = self.roster.getItem(contact_id)['jid']
-        return self.send_message_by_jid(jid,message)
+        return self.send_message_by_jid(jid, message)
 
-    def send_message_by_jid(self,jid,message):
+    def send_message_by_jid(self, jid, message):
         if self.isConnected():
-            id = self.send(xmpp.protocol.Message(to=jid,body=message,typ='chat'))
+            delivery_receipt_request = xmpp.protocol.Protocol(name='request', xmlns='urn:xmpp:receipts')
+            message_stanza = xmpp.protocol.Message(to=jid, body=message,
+                typ='chat',
+                payload=[delivery_receipt_request])
+
+            logging.debug(u"XMPPEvent : %s"%message_stanza)
+            contact_id = self.getRoster().itemId(jid)
+            message_id = self.send(message_stanza)
             if not id:
                 raise XMPPSendError()
 
-            contact_id = self.getRoster().itemId(jid)
-            result = self.message_storage.append_message(contact_id=contact_id,inbound=False,text=message)
-            self.post_message_notification(None,message,inbound=False)
+            result = self.message_storage.append_message(contact_id=contact_id, inbound=False, text=message, message_id=message_id)
+            self.post_message_notification(contact_id=contact_id, message_text=message, inbound=False)
             return result
         else:
             raise XMPPSendError()
+
+    def send_message_delivery_receipt(self, contact_id, message_id):
+        jid = self.roster.getItem(contact_id)['jid']
+        self.send_message_delivery_receipt_by_jid(jid, message_id)
+
+    def send_message_delivery_receipt_by_jid(self, jid, message_id):
+        if  self.isConnected():
+            delivery_receipt_ack = xmpp.protocol.Protocol(name='received', xmlns='urn:xmpp:receipts', attrs={'id':message_id})
+            message_stanza = xmpp.protocol.Message(to=jid, payload=[delivery_receipt_ack])
+
+            logging.debug(u"XMPPEvent : %s"%message_stanza)
+            self.send(message_stanza)
+            if not id:
+                raise XMPPSendError()
 
     def contacts(self,event_offset=None):
         if not self.isConnected():
@@ -205,10 +269,11 @@ class XMPPClient(xmpp.Client):
     @property
     def unread_count(self):
         unread_count = 0
+        chats_store = self.message_storage.chats_store
         for contact in self.roster.getRawRoster().values():
-            if (contact['id'] in self.message_storage.chats_store
-                and self.message_storage.chats_store[contact['id']][-1]['inbound']
-                and contact['read_offset'] < self.message_storage.chats_store[contact['id']][-1]['event_id']):
+            if (contact['id'] in chats_store
+                and chats_store[contact['id']][-1]['inbound']
+                and contact['read_offset'] < chats_store[contact['id']][-1]['event_id']):
                 unread_count += 1
 
         return unread_count

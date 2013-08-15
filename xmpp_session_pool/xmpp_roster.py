@@ -14,20 +14,25 @@ class XMPPRoster(xmpp.roster.Roster):
         self.default_priority = 0
         self.self_jid = None
         self.id_generator = id_generator
+        self._jid_to_id_mapping = {}
 
     def plugin(self,owner,request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
         Also request roster from server if the 'request' argument is set.
         Used internally."""
-        self._owner.Dispatcher.RegisterHandler('iq',self.RosterIqHandler,'result',xmpp.protocol.NS_ROSTER)
-        self._owner.Dispatcher.RegisterHandler('iq',self.RosterIqHandler,'set',xmpp.protocol.NS_ROSTER)
-        self._owner.Dispatcher.RegisterHandler('presence',self.PresenceHandler)
-        self.self_jid = ''.join([self._owner.User,'@',self._owner.Server])
+        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler,'result', xmpp.protocol.NS_ROSTER, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler,'set', xmpp.protocol.NS_ROSTER, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('presence', self.PresenceHandler, makefirst=True)
+        self.self_jid = ''.join([self._owner.User,'@', self._owner.Server])
         self.self_jid = self.self_jid.lower()
         if request: self.Request()
 
-    def itemId(self,jid):
-        return uuid.uuid3(self.uuid_namespace,jid.lower().encode('utf8')).hex
+    def itemId(self, jid):
+        contact_id = self._jid_to_id_mapping.get(jid, None)
+        if contact_id is None:
+            contact_id = uuid.uuid3(self.uuid_namespace,jid.lower().encode('utf8')).hex
+            self._jid_to_id_mapping[jid] = contact_id
+        return contact_id
 
     def _new_roster_item(self,jid):
         item_id = self.itemId(jid)
