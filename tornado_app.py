@@ -9,7 +9,6 @@ import os
 
 
 class MainHandler(web.RequestHandler):
-    @gen.coroutine
     def head(self):
         pass
 
@@ -150,11 +149,10 @@ class SessionHandler(XMPPClientHandler):
 
         self.write(self.response)
 
-    @gen.coroutine
     def delete(self, session_id):
         self.get_session(session_id)
         try:
-            result = yield self.async_worker.submit(self.session_pool.close_session, session_id)
+            result = self.session_pool.close_session(session_id)
         except KeyError:
             self.response['error'] = {'code':'XMPPSessionError', 'text':'There is no session with id %s'%session_id}
             raise web.HTTPError(404)
@@ -276,7 +274,6 @@ class ContactHandler(XMPPClientHandler):
             self.raise_contact_error(contact_id)
         self.write(self.response)
 
-    @gen.coroutine
     def put(self, session_id, contact_id):
         json_body = self.get_body()
         if 'contact' not in json_body:
@@ -294,7 +291,6 @@ class ContactHandler(XMPPClientHandler):
 
         self.write(self.response)
 
-    @gen.coroutine
     def delete(self, session_id, contact_id):
         self.check_contact_id(contact_id)
         session = self.get_session(session_id)
@@ -335,7 +331,6 @@ class ContactMessagesHandler(XMPPClientHandler):
 
         self.write(self.response)
 
-    @gen.coroutine
     def post(self, session_id, contact_id):
         json_body = self.get_body()
         try:
