@@ -168,8 +168,9 @@ class XMPPClient(xmpp.Client):
             return True
 
     def close(self):
-        self.UnregisterDisconnectHandler(self.DisconnectHandler)
-        self.Dispatcher.disconnect()
+        if self.isConnected():
+            self.UnregisterDisconnectHandler(self.DisconnectHandler)
+            self.Dispatcher.disconnect()
 
     def register_events_observer(self,observer):
         self._event_observers.append(observer)

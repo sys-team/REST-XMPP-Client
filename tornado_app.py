@@ -198,7 +198,7 @@ class SessionContactsHandler(XMPPClientHandler):
         contact = json_body['contact']
         session = self.get_session(session_id)
         jid = contact.get('jid')
-        contact_added = yield self.async_worker.submit(session.add_contact, jid, contact.get('name'))
+        contact_added = session.add_contact, jid, contact.get('name')
 
         timeout = 5.0
         while timeout and contact_added is None:
@@ -287,7 +287,7 @@ class ContactHandler(XMPPClientHandler):
         session = self.get_session(session_id)
 
         try:
-            updated_contact = yield self.async_worker.submit(self.put_contact, session, contact_id, json_body)
+            updated_contact = self.put_contact(session, contact_id, json_body)
             self.response['contacts'] = [updated_contact]
         except KeyError:
             self.raise_contact_error(contact_id)
@@ -300,7 +300,7 @@ class ContactHandler(XMPPClientHandler):
         session = self.get_session(session_id)
 
         try:
-            yield self.async_worker.submit(session.remove_contact, contact_id)
+            session.remove_contact(contact_id)
         except TypeError:
             self.raise_contact_error(contact_id)
 
@@ -348,7 +348,7 @@ class ContactMessagesHandler(XMPPClientHandler):
         session = self.get_session(session_id)
 
         try:
-            self.response['messages'] = yield self.async_worker.submit(session.send, contact_id, message)
+            self.response['messages'] = session.send(contact_id, message)
         except XMPPSendError:
             self.raise_message_sending_error()
         except TypeError:
