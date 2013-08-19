@@ -4,7 +4,6 @@ from tornado import web, gen, ioloop
 from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError
 from datetime import timedelta
 import json
-import psutil
 import os
 
 
@@ -359,18 +358,21 @@ class ContactMessagesHandler(XMPPClientHandler):
 
 class ServerStatusHandler(XMPPClientHandler):
     def get(self):
-        def sizeof_fmt(num):
-            for x in ['B','kB','MB','GB']:
-                if num < 1024.0:
-                    return {'value':num, 'units':x}
-                num /= 1024.0
-            return {'value':num, 'units':'TB'}
-
         response = {}
-        process = psutil.Process(os.getpid())
+        try:
+            import psutil
+            def sizeof_fmt(num):
+                for x in ['B','kB','MB','GB']:
+                    if num < 1024.0:
+                        return {'value':num, 'units':x}
+                    num /= 1024.0
+                return {'value':num, 'units':'TB'}
+            process = psutil.Process(os.getpid())
+            response['memory'] = sizeof_fmt(process.get_memory_info()[0])
+            response['threads'] = process.get_num_threads()
+        except ImportError:
+            pass
 
-        response['memory'] = sizeof_fmt(process.get_memory_info()[0])
-        response['threads'] = process.get_num_threads()
         response['im_sessions'] = len(self.session_pool.session_pool.keys())
         response['im_clients'] = len(self.session_pool.im_client_pool.keys())
         response['xmpp_clients'] = len(self.session_pool.xmpp_client_pool.keys())
