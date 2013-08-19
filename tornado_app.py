@@ -195,7 +195,7 @@ class SessionContactsHandler(XMPPClientHandler):
         contact = json_body['contact']
         session = self.get_session(session_id)
         jid = contact.get('jid')
-        contact_added = session.add_contact, jid, contact.get('name')
+        contact_added = session.add_contact(jid, contact.get('name'))
 
         timeout = 5.0
         while timeout and contact_added is None:
