@@ -34,7 +34,7 @@ class TornadoApp(object):
             (r"/sessions/([^/]*)", SessionHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
             (r"/start-session", StartSession, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
             (r"/server-status", ServerStatusHandler, dict(session_pool = self._xmpp_session_pool, async_worker = self._async_worker)),
-            (r"/", MainHandler, dict(async_worker = self._async_worker))
+            (r"/", MainHandler)
         ])
 
     def run(self,host='0.0.0.0',port=5000):

@@ -1,25 +1,16 @@
 __author__ = 'kovtash'
 
-from tornado import web, gen
+from tornado import web, gen, ioloop
 from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError
+from datetime import timedelta
 import json
-import psutil
 import os
-import time
 
 
 class MainHandler(web.RequestHandler):
-    def initialize(self, async_worker):
-        self.async_worker = async_worker
-
     @gen.coroutine
-    def get(self):
-        result = yield self.async_worker.submit(self.work, 'Done')
-        self.write(result)
-
-    def work(self,message):
-        time.sleep(10)
-        return message
+    def head(self):
+        pass
 
 
 class XMPPClientHandler(web.RequestHandler):
@@ -55,7 +46,7 @@ class XMPPClientHandler(web.RequestHandler):
             return None
 
     def get_offset(self):
-        offset = self.get_argument('offset',None)
+        offset = self.get_argument('offset', None)
 
         if offset is not None:
             try:
@@ -64,6 +55,17 @@ class XMPPClientHandler(web.RequestHandler):
                 self.raise_value_error('offset')
 
         return offset
+
+    def get_should_wait(self):
+        should_wait_param = self.get_argument('wait', None)
+        should_wait = False
+        if should_wait_param is not None:
+            try:
+                should_wait = bool(should_wait_param)
+            except ValueError:
+                self.raise_value_error('wait')
+
+        return should_wait
 
     def get_session(self, session_id):
         if session_id is None:
@@ -174,7 +176,6 @@ class SessionHandler(XMPPClientHandler):
 
 
 class SessionContactsHandler(XMPPClientHandler):
-    @gen.coroutine
     def get(self, session_id):
         """
             Request parameters:
@@ -183,7 +184,7 @@ class SessionContactsHandler(XMPPClientHandler):
         session = self.get_session(session_id)
         offset = self.get_offset()
 
-        self.response['contacts'] = yield self.async_worker.submit(session.contacts, event_offset=offset)
+        self.response['contacts'] = session.contacts(event_offset=offset)
         self.write(self.response)
 
     @gen.coroutine
@@ -195,27 +196,25 @@ class SessionContactsHandler(XMPPClientHandler):
 
         contact = json_body['contact']
         session = self.get_session(session_id)
-        contact_added = yield self.async_worker.submit(self.add_contact, session, contact.get('jid'), contact.get('name'))
+        jid = contact.get('jid')
+        contact_added = yield self.async_worker.submit(session.add_contact, jid, contact.get('name'))
+
+        timeout = 5.0
+        while timeout and contact_added is None:
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
+            yield gen.Wait("wait")
+            timeout -= 0.5
+            contact_added = session.contact_by_jid(jid)
+
         if contact_added is not None:
             self.response['contacts'] = [contact_added]
         else:
-            self.raise_contact_error(contact.get('jid'))
+            self.raise_contact_error(jid)
 
         self.write(self.response)
 
-    def add_contact(self, session, jid, name):
-        session.add_contact(jid, name)
-        timeout = 5.0
-        contact_added = session.contact_by_jid(jid)
-        while timeout and contact_added is None:
-            time.sleep(0.5)
-            timeout -= 0.5
-            contact_added = session.contact_by_jid(jid)
-        return contact_added
-
 
 class SessionMessagesHandler(XMPPClientHandler):
-    @gen.coroutine
     def get(self, session_id):
         """
             Request parameters:
@@ -224,11 +223,12 @@ class SessionMessagesHandler(XMPPClientHandler):
         session = self.get_session(session_id)
         offset = self.get_offset()
 
-        self.response['messages'] = yield self.async_worker.submit(session.messages, event_offset=offset)
+        self.response['messages'] = session.messages(event_offset=offset)
         self.write(self.response)
 
 
 class SessionFeedHandler(XMPPClientHandler):
+    @web.asynchronous
     @gen.coroutine
     def get(self, session_id):
         """
@@ -237,12 +237,20 @@ class SessionFeedHandler(XMPPClientHandler):
                 offset - returns objects which has been changed  or added since offset
         """
         offset = self.get_offset()
+        should_wait = self.get_should_wait()
         session = self.get_session(session_id)
 
-        self.response['contacts'] = yield self.async_worker.submit(session.contacts, event_offset=offset)
-        self.response['messages'] = yield self.async_worker.submit(session.messages, event_offset=offset)
+        self.response['contacts'] = session.contacts(event_offset=offset)
+        self.response['messages'] = session.messages(event_offset=offset)
 
+        if (not (len(self.response['contacts'])+len(self.response['messages'])) and should_wait):
+            session.wait_for_notification(callback = (yield gen.Callback("notification")))
+            yield gen.Wait("notification")
+            session = self.get_session(session_id)
+            self.response['contacts'] = session.contacts(event_offset=offset)
+            self.response['messages'] = session.messages(event_offset=offset)
         self.write(self.response)
+        self.finish()
 
 
 class SessionNotificationHandler(XMPPClientHandler):
@@ -310,7 +318,6 @@ class ContactHandler(XMPPClientHandler):
 
 
 class ContactMessagesHandler(XMPPClientHandler):
-    @gen.coroutine
     def get(self, session_id, contact_id):
         """
             Request parameters:
@@ -321,12 +328,13 @@ class ContactMessagesHandler(XMPPClientHandler):
         offset = self.get_offset()
 
         try:
-            self.response['messages'] = yield self.async_worker.submit(session.messages, contact_ids=[contact_id], event_offset=offset)
+            self.response['messages'] = session.messages(contact_ids=[contact_id], event_offset=offset)
         except TypeError:
             self.raise_contact_error(contact_id)
 
         self.write(self.response)
 
+    @gen.coroutine
     def post(self, session_id, contact_id):
         json_body = self.get_body()
         try:
@@ -338,35 +346,34 @@ class ContactMessagesHandler(XMPPClientHandler):
         self.check_contact_id(contact_id)
         session = self.get_session(session_id)
 
-        if message is None:
-            try:
-                self.response['messages'] = session.messages(contact_ids=[contact_id])
-            except TypeError:
-                self.raise_contact_error(contact_id)
-        else:
-            try:
-                self.response['messages'] = session.send(contact_id,message)
-            except XMPPSendError:
-                self.raise_message_sending_error()
-            except TypeError:
-                self.raise_contact_error(contact_id)
+        try:
+            self.response['messages'] = yield self.async_worker.submit(session.send, contact_id, message)
+        except XMPPSendError:
+            self.raise_message_sending_error()
+        except TypeError:
+            self.raise_contact_error(contact_id)
 
         self.write(self.response)
 
 
 class ServerStatusHandler(XMPPClientHandler):
     def get(self):
-        def sizeof_fmt(num):
-            for x in ['B','kB','MB','GB']:
-                if num < 1024.0:
-                    return {'value':num, 'units':x}
-                num /= 1024.0
-            return {'value':num, 'units':'TB'}
-
         response = {}
-        process = psutil.Process(os.getpid())
+        try:
+            import psutil
+            def sizeof_fmt(num):
+                for x in ['B','kB','MB','GB']:
+                    if num < 1024.0:
+                        return {'value':num, 'units':x}
+                    num /= 1024.0
+                return {'value':num, 'units':'TB'}
+            process = psutil.Process(os.getpid())
+            response['memory'] = sizeof_fmt(process.get_memory_info()[0])
+            response['threads'] = process.get_num_threads()
+        except ImportError:
+            pass
 
-        response['memory'] = sizeof_fmt(process.get_memory_info()[0])
-        response['threads'] = process.get_num_threads()
-        response['sessions'] = len(self.session_pool.session_pool.keys())
+        response['im_sessions'] = len(self.session_pool.session_pool.keys())
+        response['im_clients'] = len(self.session_pool.im_client_pool.keys())
+        response['xmpp_clients'] = len(self.session_pool.xmpp_client_pool.keys())
         self.write(response)
