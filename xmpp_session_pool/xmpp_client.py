@@ -309,13 +309,10 @@ class XMPPClient(xmpp.Client):
             self.roster.delItem(item['jid'])
 
     def join_muc_by_jid(self, muc_jid):
-        print 'Creating', muc_jid
         user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
                                          resource=self.jid.node)
-        muc = xmpp.protocol.Protocol(name='x', xmlns='http://jabber.org/protocol/muc')
-        pres = xmpp.protocol.Presence(to=user_muc_jid, payload=[muc])
-        print 'Presence', pres
-        if self.send(pres) is None:
+
+        if self.roster.join_muc_by_jid(user_muc_jid) is None:
             raise XMPPSendError()
 
     def apply_properties_to_muc(self, muc_id, name):
@@ -362,7 +359,6 @@ class XMPPClient(xmpp.Client):
         self.join_muc(muc_id)
         self.apply_properties_to_muc(muc_id, name)
         self.invite_to_muc_by_jid(muc_id, 'aluzar@jab4all.com')
-        self.leave_muc(muc_id)
 
     def muc_by_id(self, muc_id=None):
         return muc_id

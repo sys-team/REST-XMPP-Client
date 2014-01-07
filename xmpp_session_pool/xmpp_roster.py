@@ -6,8 +6,11 @@ import uuid
 import operator
 from event_id import XMPPSessionEventID
 
+NS_MUC = 'http://jabber.org/protocol/muc'
+NS_MUC_USER = "http://jabber.org/protocol/muc#user"
+
 class XMPPRoster(xmpp.roster.Roster):
-    def __init__(self,id_generator):
+    def __init__(self, id_generator):
         xmpp.roster.Roster.__init__(self)
         self.uuid_namespace = uuid.uuid4()
         self._internal_data = {}
@@ -16,7 +19,7 @@ class XMPPRoster(xmpp.roster.Roster):
         self.id_generator = id_generator
         self._jid_to_id_mapping = {}
 
-    def plugin(self,owner,request=1):
+    def plugin(self, owner, request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
         Also request roster from server if the 'request' argument is set.
         Used internally."""
@@ -25,7 +28,8 @@ class XMPPRoster(xmpp.roster.Roster):
         self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler, 'set',
                                                xmpp.protocol.NS_ROSTER, makefirst=True)
         self._owner.Dispatcher.RegisterHandler('presence', self.PresenceHandler, makefirst=True)
-        self.self_jid = ''.join([self._owner.User,'@', self._owner.Server])
+        self._owner.Dispatcher.RegisterHandler('message', self.muc_invite_handler, 'normal', makefirst=True)
+        self.self_jid = ''.join([self._owner.User, '@', self._owner.Server])
         self.self_jid = self.self_jid.lower()
         if request:
             self.Request()
@@ -37,47 +41,58 @@ class XMPPRoster(xmpp.roster.Roster):
             self._jid_to_id_mapping[jid] = contact_id
         return contact_id
 
-    def _new_roster_item(self,jid):
+    def _new_roster_item(self, jid):
         item_id = self.itemId(jid)
-        self._data[item_id] = {'id':item_id,
-                                'jid':jid,
-                                'name':None,
-                                'show':'offline',
-                                'status':None,
-                                'authorization':'none',
-                                'read_offset':0,
-                                'subscription':'none',
-                                'ask':None,}
+        self._data[item_id] = {'id': item_id,
+                               'jid': jid,
+                               'name': None,
+                               'show': 'offline',
+                               'status': None,
+                               'authorization': 'none',
+                               'read_offset': 0,
+                               'subscription': 'none',
+                               'ask': None,}
         return self._data[item_id]
 
-    def _get_item_internal_data(self,item_id):
+    def _get_item_internal_data(self, item_id):
         if item_id not in self._internal_data:
-            self._internal_data[item_id] = {'name':None,'nick':None,'resources':{}}
+            self._internal_data[item_id] = {'name': None, 'nick': None, 'resources': {}}
         return self._internal_data[item_id]
 
-    def RosterIqHandler(self,dis,stanza):
+    def muc_invite_handler(self, dis, message):
+        for item in message.getTags('x'):
+            if item.getAttr('xmlns') == NS_MUC_USER:
+                invited_by_jid = item.getTag('invite').getAttr('from')
+                invited_by_jid = invited_by_jid.split('/')[0]
+                muc_jid = message.getFrom()
+                if self.getItemByJID(invited_by_jid) is not None and muc_jid is not None:
+                    self.join_muc_by_jid(muc_jid)
+
+    def RosterIqHandler(self, dis, stanza):
         """ Subscription tracker. Used internally for setting items state in
             internal roster representation. """
         for item in stanza.getTag('query').getTags('item'):
-            jid=item.getAttr('jid')
+            jid = item.getAttr('jid')
             item_id = self.itemId(jid)
 
-            if item.getAttr('subscription')=='remove':
-                if item_id in self._data: del self._data[item_id]
-                if item_id in self._internal_data: del self._internal_data[item_id]
-                raise xmpp.protocol.NodeProcessed             # a MUST
+            if item.getAttr('subscription') == 'remove':
+                if item_id in self._data:
+                    del self._data[item_id]
+                if item_id in self._internal_data:
+                    del self._internal_data[item_id]
+                raise xmpp.protocol.NodeProcessed  # a MUST
 
-            if ((item.getAttr('subscription')=='none'
-                or item.getAttr('subscription')=='from')
-                and item.getAttr('ask') != 'subscribe'): # ignore contacts without any subscriptions
+            if ((item.getAttr('subscription') == 'none'
+                or item.getAttr('subscription') == 'from')
+                and item.getAttr('ask') != 'subscribe'):  # Ignore contacts without any subscriptions
                 continue
 
-            if  item.getAttr('ask') == 'subscribe' and stanza.getAttr('type') != 'set': #Resend subscription request
+            if item.getAttr('ask') == 'subscribe' and stanza.getAttr('type') != 'set':  # Resend subscription request
                 self.Unsubscribe(jid=jid)
                 self.Subscribe(jid=jid)
 
-            self.DEBUG('Setting roster item %s...'%item_id,'ok')
-            if item_id not in  self._data:
+            self.DEBUG('Setting roster item %s...' % item_id, 'ok')
+            if item_id not in self._data:
                 self._new_roster_item(jid)
             roster_item = self._data[item_id]
             internal_data_item = self._get_item_internal_data(item_id)
@@ -93,28 +108,29 @@ class XMPPRoster(xmpp.roster.Roster):
 
             internal_data_item['name'] = item.getAttr('name')
 
-        self.set=1
+        self.set = 1
 
         raise xmpp.protocol.NodeProcessed   # a MUST. Otherwise you'll get back an <iq type='error'/>
 
-    def PresenceHandler(self,dis,pres):
+    def PresenceHandler(self, dis, pres):
         """ Presence tracker. Used internally for setting items' resources state in
             internal roster representation. """
-        jid=xmpp.protocol.JID(pres.getFrom())
+        jid = xmpp.protocol.JID(pres.getFrom())
         item_id = self.itemId(jid.getStripped())
 
-        if  self.self_jid == jid.getStripped():
+        if self.self_jid == jid.getStripped():
             self.DEBUG('Presence from own clients')
             return
 
         internal_data = self._get_item_internal_data(item_id)
         roster_item_resources = internal_data['resources']
-        typ=pres.getType()
+        typ = pres.getType()
 
         if not typ:
-            self.DEBUG('Setting roster item %s for resource %s...'%(jid.getStripped(),jid.getResource()),'ok')
+            self.DEBUG('Setting roster item %s for resource %s...' % (jid.getStripped(),jid.getResource()), 'ok')
             if jid.getResource() not in roster_item_resources:
-                roster_item_resources[jid.getResource()]={'priority':0,'show':'online','status':None,'nick':None}
+                roster_item_resources[jid.getResource()] = {'priority': 0, 'show': 'online',
+                                                            'status': None, 'nick': None}
 
             res = roster_item_resources[jid.getResource()]
 
@@ -136,7 +152,7 @@ class XMPPRoster(xmpp.roster.Roster):
             if roster_item is None:
                 roster_item = self._new_roster_item(jid.getStripped())
                 roster_item['authorization'] = 'requested'
-                roster_item['event_id']=self.id_generator.id()
+                roster_item['event_id'] = self.id_generator.id()
             else:
                 if roster_item['subscription'] == 'to':
                     self.Authorize(roster_item['jid'])
@@ -144,7 +160,7 @@ class XMPPRoster(xmpp.roster.Roster):
         elif typ == 'subscribed':
             if item_id in self._data:
                 self._data[item_id]['authorization'] = 'granted'
-                self._data[item_id]['event_id']=self.id_generator.id()
+                self._data[item_id]['event_id'] = self.id_generator.id()
 
         elif typ == 'unavailable' and jid.getResource() in roster_item_resources:
             del roster_item_resources[jid.getResource()]
@@ -155,7 +171,7 @@ class XMPPRoster(xmpp.roster.Roster):
         if len(roster_item_resources):
             current_resource = max(roster_item_resources.itervalues(), key=operator.itemgetter('priority'))
         else:
-            current_resource = {'priority':0,'show':'offline','status':None,'nick':None}
+            current_resource = {'priority': 0, 'show': 'offline', 'status': None, 'nick': None}
 
         if item_id in self._data:
             roster_item = self._data[item_id]
@@ -169,67 +185,68 @@ class XMPPRoster(xmpp.roster.Roster):
                 else:
                     roster_item['name'] = jid.getStripped()
 
-    def _getItemData(self,jid,dataname):
+    def _getItemData(self, jid, dataname):
         """ Return specific jid's representation in internal format. Used internally. """
-        jid=jid[:(jid+'/').find('/')]
+        jid = jid[:(jid+'/').find('/')]
         return self._data[self.itemId(jid)][dataname]
 
-    def _getResourceData(self,jid,dataname):
+    def _getResourceData(self, jid, dataname):
         """ Return specific jid's resource representation in internal format. Used internally. """
-        if jid.find('/')+1:
-            jid,resource=jid.split('/',1)
+        if jid.find('/') + 1:
+            jid, resource = jid.split('/', 1)
             item_id = self.itemId(jid)
             if resource in self._internal_data[item_id]['resources']:
                 return self._internal_data[item_id]['resources'][resource][dataname]
         elif self._internal_data[self.itemId(jid)]['resources'].keys():
             item_id = self.itemId(jid)
-            lastpri=-129
+            lastpri =- 129
             for r in self._internal_data[item_id]['resources'].keys():
-                if int(self._internal_data[item_id]['resources'][r]['priority'])>lastpri: resource,lastpri=r,int(self._internal_data[item_id]['resources'][r]['priority'])
+                if int(self._internal_data[item_id]['resources'][r]['priority']) > lastpri: resource, lastpri=r, int(self._internal_data[item_id]['resources'][r]['priority'])
             return self._internal_data[item_id]['resources'][resource][dataname]
 
-    def setItemReadOffset(self,item_id,read_offset):
+    def setItemReadOffset(self, item_id, read_offset):
         if item_id in self._data and 'read_offset' in self._data[item_id]:
             item = self._data[item_id]
-            if  read_offset > item['read_offset']:
+            if read_offset > item['read_offset']:
                 item['read_offset'] = read_offset
                 item['event_id'] = self.id_generator.id()
                 return True
         return False
 
-    def getItemReadOffset(self,item_id):
+    def getItemReadOffset(self, item_id):
         if item_id in self._data and 'read_offset' in self._data[item_id]:
             return self._data[item_id]['read_offset']
         else:
             return 0
 
-    def getContacts(self,event_offset=None):
+    def getContacts(self, event_offset=None):
         contacts = self.getRawRoster().values()
-        if  event_offset is not None:
-            contacts = filter(lambda contact: contact['event_id'] > event_offset,contacts)
+        if event_offset is not None:
+            contacts = filter(lambda contact: contact['event_id'] > event_offset, contacts)
         return contacts
 
-    def getRawItem(self,jid):
+    def getRawItem(self, jid):
         """ Returns roster item 'jid' representation in internal format. """
         return self._data[self.itemId(jid[:(jid+'/').find('/')])]
 
-    def getResources(self,jid):
+    def getResources(self, jid):
         """ Returns list of connected resources of contact 'jid'."""
         return self._internal_data[self.itemId(jid[:(jid+'/').find('/')])]['resources'].keys()
 
-    def getItemByJID(self,jid):
+    def getItemByJID(self, jid):
         return self.getItem(self.itemId(jid))
 
-    def setItem(self,jid,name=None,groups=[]):
+    def setItem(self, jid, name=None, groups=[]):
         """ Creates/renames contact 'jid' and sets the groups list that it now belongs to."""
-        iq=xmpp.protocol.Iq('set',xmpp.protocol.NS_ROSTER)
-        query=iq.getTag('query')
-        attrs={'jid':jid}
-        if name: attrs['name']=name
-        item=query.setTag('item',attrs)
-        for group in groups: item.addChild(node=xmpp.simplexml.Node('group',payload=[group]))
-        id = self._owner.send(iq)
-        return id
+        iq = xmpp.protocol.Iq('set', xmpp.protocol.NS_ROSTER)
+        query = iq.getTag('query')
+        attrs = {'jid': jid}
+        if name:
+            attrs['name'] = name
+        item = query.setTag('item', attrs)
+        for group in groups:
+            item.addChild(node=xmpp.simplexml.Node('group', payload=[group]))
+        return self._owner.send(iq)
 
     def updateItem(self, contact_id, name=None, groups=None):
         if contact_id not in self._data:
@@ -247,3 +264,10 @@ class XMPPRoster(xmpp.roster.Roster):
             name = contact['name']
 
         return self.setItem(contact['jid'], name=name, groups=groups)
+
+    def join_muc_by_jid(self, muc_jid):
+        user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
+                                         resource=self._owner.jid.node)
+        muc = xmpp.protocol.Protocol(name='x', xmlns=NS_MUC)
+        pres = xmpp.protocol.Presence(to=user_muc_jid, payload=[muc])
+        return self._owner.send(pres)
