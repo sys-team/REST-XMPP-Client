@@ -20,12 +20,15 @@ class XMPPRoster(xmpp.roster.Roster):
         """ Register presence and subscription trackers in the owner's dispatcher.
         Also request roster from server if the 'request' argument is set.
         Used internally."""
-        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler,'result', xmpp.protocol.NS_ROSTER, makefirst=True)
-        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler,'set', xmpp.protocol.NS_ROSTER, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler, 'result',
+                                               xmpp.protocol.NS_ROSTER, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('iq', self.RosterIqHandler, 'set',
+                                               xmpp.protocol.NS_ROSTER, makefirst=True)
         self._owner.Dispatcher.RegisterHandler('presence', self.PresenceHandler, makefirst=True)
         self.self_jid = ''.join([self._owner.User,'@', self._owner.Server])
         self.self_jid = self.self_jid.lower()
-        if request: self.Request()
+        if request:
+            self.Request()
 
     def itemId(self, jid):
         contact_id = self._jid_to_id_mapping.get(jid, None)
@@ -234,7 +237,7 @@ class XMPPRoster(xmpp.roster.Roster):
 
         contact = self._data[contact_id]
 
-        if  (name is None or name == contact['name']) and groups is None:
+        if (name is None or name == contact['name']) and groups is None:
             return
 
         if groups is None:

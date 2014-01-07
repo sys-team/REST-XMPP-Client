@@ -5,6 +5,7 @@ import uuid
 import logging
 from Queue import Queue
 
+
 class XMPPSession(object):
     def __init__(self, session_id, xmpp_client, im_client):
         self.session_id = session_id
@@ -28,7 +29,7 @@ class XMPPSession(object):
     def message_appended_notification(self, contact_id, message_text, inbound):
         contact = self.xmpp_client.contact(contact_id)
 
-        if  message_text is not None and contact is not None:
+        if message_text is not None and contact is not None:
             self.notify_observers()
             if inbound:
                 if self.should_send_message_body:
@@ -68,7 +69,7 @@ class XMPPSession(object):
 
     def contact(self, contact_id):
         contact = self.xmpp_client.contact(contact_id)
-        if  contact is None:
+        if contact is None:
             raise KeyError
         return contact
 
@@ -89,6 +90,12 @@ class XMPPSession(object):
 
     def remove_contact(self, contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
+
+    def create_muc(self, muc_id, name):
+        self.xmpp_client.create_muc(muc_id=muc_id, name=name)
+
+    def muc_by_id(self, muc_id):
+        return self.xmpp_client.muc_by_id(muc_id=muc_id)
 
     def wait_for_notification(self, callback):
         self.notification_queue.put_nowait(callback)

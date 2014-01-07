@@ -236,7 +236,7 @@ class XMPPClient(xmpp.Client):
         self.send_message_delivery_receipt_by_jid(jid, message_id)
 
     def send_message_delivery_receipt_by_jid(self, jid, message_id):
-        if  self.isConnected():
+        if self.isConnected():
             delivery_receipt_ack = xmpp.protocol.Protocol(name='received', xmlns='urn:xmpp:receipts', attrs={'id':message_id})
             message_stanza = xmpp.protocol.Message(to=jid, payload=[delivery_receipt_ack])
 
@@ -245,13 +245,13 @@ class XMPPClient(xmpp.Client):
             if not id:
                 raise XMPPSendError()
 
-    def contacts(self,event_offset=None):
+    def contacts(self, event_offset=None):
         if not self.isConnected():
             raise XMPPRosterError()
 
         return self.roster.getContacts(event_offset=event_offset)
 
-    def contact(self,contact_id):
+    def contact(self, contact_id):
         if self.isConnected():
             return self.roster.getItem(contact_id)
         else:
@@ -282,7 +282,7 @@ class XMPPClient(xmpp.Client):
         old_unread_count_value = self.unread_count
         if self.roster.setItemReadOffset(contact_id, read_offset):
             self.post_contacts_notification()
-        if  old_unread_count_value != self.unread_count:
+        if old_unread_count_value != self.unread_count:
             self.post_unread_count_notification()
 
     def set_contact_authorization(self, contact_id, authorization):
@@ -291,7 +291,7 @@ class XMPPClient(xmpp.Client):
         if contact is None or contact['authorization'] == authorization:
             return
 
-        if  authorization == 'granted':
+        if authorization == 'granted':
             self.add_contact(contact['jid'])
             roster.Authorize(contact['jid'])
         elif authorization == 'none':
@@ -307,3 +307,92 @@ class XMPPClient(xmpp.Client):
         item = self.roster.getItem(contact_id)
         if item is not None and 'jid' in item:
             self.roster.delItem(item['jid'])
+
+    def join_muc_by_jid(self, muc_jid):
+        print 'Creating', muc_jid
+        user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
+                                         resource=self.jid.node)
+        muc = xmpp.protocol.Protocol(name='x', xmlns='http://jabber.org/protocol/muc')
+        pres = xmpp.protocol.Presence(to=user_muc_jid, payload=[muc])
+        print 'Presence', pres
+        if self.send(pres) is None:
+            raise XMPPSendError()
+
+    def apply_properties_to_muc(self, muc_id, name):
+        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
+        property_dict = {'FORM_TYPE': 'http://jabber.org/protocol/muc#roomconfig',
+                         'muc#roomconfig_roomname': name,
+                         'muc#roomconfig_persistentroom': '0',
+                         'muc#roomconfig_publicroom': '0',
+                         'public_list': '1',
+                         'muc#roomconfig_passwordprotectedroom': '0',
+                         'muc#roomconfig_maxusers': '30',
+                         'muc#roomconfig_whois': 'anyone',
+                         'muc#roomconfig_membersonly': '1',
+                         'muc#roomconfig_moderatedroom': '0',
+                         'members_by_default': '1',
+                         'muc#roomconfig_changesubject': '0',
+                         'allow_private_messages': '0',
+                         'allow_private_messages_from_visitors': 'nobody',
+                         'allow_query_users': '1',
+                         'muc#roomconfig_allowinvites': '1',
+                         'muc#roomconfig_allowvisitorstatus': '1',
+                         'muc#roomconfig_allowvisitornickchange': '1',
+                         'muc#roomconfig_allowvoicerequests': '0',
+                         'muc#roomconfig_captcha_whitelist': None}
+
+        property_fields = []
+
+        for var, value in property_dict.items():
+            field = xmpp.protocol.DataField(value=value)
+            field.delAttr('type')
+            field.setVar(var)
+            property_fields.append(field)
+
+        form = xmpp.protocol.DataForm(typ='submit', data=property_fields)
+
+        properties_iq = xmpp.protocol.Iq(typ='set', to=muc_jid,
+                                         queryNS='http://jabber.org/protocol/muc#owner',
+                                         payload=[form])
+        print(properties_iq)
+        if self.send(properties_iq) is None:
+            raise XMPPSendError()
+
+    def create_muc(self, muc_id, name):
+        self.join_muc(muc_id)
+        self.apply_properties_to_muc(muc_id, name)
+        self.invite_to_muc_by_jid(muc_id, 'aluzar@jab4all.com')
+        self.leave_muc(muc_id)
+
+    def muc_by_id(self, muc_id=None):
+        return muc_id
+
+    def join_muc(self, muc_id):
+        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
+        self.join_muc_by_jid(muc_jid)
+
+    def leave_muc(self, muc_id):
+        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
+        user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
+                                         resource=self.jid.node)
+        pres = xmpp.protocol.Presence(to=user_muc_jid, typ='unavailable')
+        print 'Presence', pres
+        if self.send(pres) is None:
+            raise XMPPSendError()
+        #<presence to='test_vlad@conference.jab4all.com/aluzar' type='unavailable'/>
+        pass
+
+    def invite_to_muc_by_jid(self, muc_id, jid_string):
+        invite = xmpp.protocol.Protocol(name='invite', to=jid_string)
+        x = xmpp.protocol.Protocol(name='x', xmlns='http://jabber.org/protocol/muc#user', payload=[invite])
+        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
+        invite_message = xmpp.protocol.Message(to=muc_jid, payload=[x])
+        print(invite_message)
+        if self.send(invite_message) is None:
+            raise XMPPSendError()
+        #<message to='test@conference.jab4all.com'><x xmlns='http://jabber.org/protocol/muc#user'><invite to='vlad@jab4all.com'><reason>aluzar@jab4all.com invites you to join the chat &quot;test@conference.jab4all.com&quot;</reason></invite></x></message>
+
+
+
+
+
