@@ -303,20 +303,42 @@ class XMPPClient(xmpp.Client):
         else:
             raise XMPPRosterError()
 
-    def remove_contact(self,contact_id):
+    def remove_contact(self, contact_id):
         item = self.roster.getItem(contact_id)
         if item is not None and 'jid' in item:
             self.roster.delItem(item['jid'])
 
-    def join_muc_by_jid(self, muc_jid):
-        user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
-                                         resource=self.jid.node)
+    def muc(self, muc_id):
+        if self.isConnected():
+            return self.roster.get_muc(muc_id)
+        else:
+            raise XMPPRosterError()
 
-        if self.roster.join_muc_by_jid(user_muc_jid) is None:
+    def join_muc_by_jid(self, muc_jid):
+        muc_jid = xmpp.JID(muc_jid)
+        if self.roster.join_muc_by_jid(muc_jid) is None:
             raise XMPPSendError()
 
-    def apply_properties_to_muc(self, muc_id, name):
-        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
+    def create_muc(self, muc_node, name):
+        muc_jid = xmpp.protocol.JID(node=muc_node, domain='conference.' + self.jid.domain)
+        if self.roster.join_muc_by_jid(muc_jid) is None:
+            raise XMPPSendError()
+        self.apply_properties_to_muc(muc_jid, name)
+        self.roster.invite_to_muc_by_jid(muc_jid, xmpp.JID('aluzar@jab4all.com'))
+
+    def muc_by_node(self, muc_node=None):
+        muc_jid = xmpp.protocol.JID(node=muc_node, domain='conference.' + self.jid.domain)
+        return self.roster.get_muc_by_jid(muc_jid)
+
+    def remove_muc(self, muc_id):
+        if self.roster.leave_muc(muc_id) is None:
+            raise XMPPSendError()
+
+    def invite_to_muc(self, muc_id, contact_id):
+        if self.roster.invite_to_muc(muc_id, contact_id) is None:
+            raise XMPPSendError()
+
+    def apply_properties_to_muc(self, muc_jid, name):
         property_dict = {'FORM_TYPE': 'http://jabber.org/protocol/muc#roomconfig',
                          'muc#roomconfig_roomname': name,
                          'muc#roomconfig_persistentroom': '0',
@@ -354,40 +376,6 @@ class XMPPClient(xmpp.Client):
         print(properties_iq)
         if self.send(properties_iq) is None:
             raise XMPPSendError()
-
-    def create_muc(self, muc_id, name):
-        self.join_muc(muc_id)
-        self.apply_properties_to_muc(muc_id, name)
-        self.invite_to_muc_by_jid(muc_id, 'aluzar@jab4all.com')
-
-    def muc_by_id(self, muc_id=None):
-        return muc_id
-
-    def join_muc(self, muc_id):
-        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
-        self.join_muc_by_jid(muc_jid)
-
-    def leave_muc(self, muc_id):
-        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
-        user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
-                                         resource=self.jid.node)
-        pres = xmpp.protocol.Presence(to=user_muc_jid, typ='unavailable')
-        print 'Presence', pres
-        if self.send(pres) is None:
-            raise XMPPSendError()
-        #<presence to='test_vlad@conference.jab4all.com/aluzar' type='unavailable'/>
-        pass
-
-    def invite_to_muc_by_jid(self, muc_id, jid_string):
-        invite = xmpp.protocol.Protocol(name='invite', to=jid_string)
-        x = xmpp.protocol.Protocol(name='x', xmlns='http://jabber.org/protocol/muc#user', payload=[invite])
-        muc_jid = xmpp.protocol.JID(node=muc_id, domain='conference.' + self.jid.domain)
-        invite_message = xmpp.protocol.Message(to=muc_jid, payload=[x])
-        print(invite_message)
-        if self.send(invite_message) is None:
-            raise XMPPSendError()
-        #<message to='test@conference.jab4all.com'><x xmlns='http://jabber.org/protocol/muc#user'><invite to='vlad@jab4all.com'><reason>aluzar@jab4all.com invites you to join the chat &quot;test@conference.jab4all.com&quot;</reason></invite></x></message>
-
 
 
 

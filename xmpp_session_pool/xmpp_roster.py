@@ -18,6 +18,8 @@ class XMPPRoster(xmpp.roster.Roster):
         self.self_jid = None
         self.id_generator = id_generator
         self._jid_to_id_mapping = {}
+        self._muc_list = {}
+        self._muc_members = {}
 
     def plugin(self, owner, request=1):
         """ Register presence and subscription trackers in the owner's dispatcher.
@@ -51,13 +53,33 @@ class XMPPRoster(xmpp.roster.Roster):
                                'authorization': 'none',
                                'read_offset': 0,
                                'subscription': 'none',
-                               'ask': None,}
+                               'ask': None}
         return self._data[item_id]
+
+    def _new_muc_roster_item(self, jid):
+        item_id = self.itemId(jid)
+        self._muc_list[item_id] = {'id': item_id,
+                                   'jid': jid,
+                                   'name': None,
+                                   'read_offset': 0}
+        self._muc_members[item_id] = {}
 
     def _get_item_internal_data(self, item_id):
         if item_id not in self._internal_data:
             self._internal_data[item_id] = {'name': None, 'nick': None, 'resources': {}}
         return self._internal_data[item_id]
+
+    def get_muc(self, muc_id):
+        result = None
+        if muc_id in self._muc_list:
+            result = self._muc_list[muc_id].copy()
+            result['members'] = []
+            if muc_id in self._muc_members:
+                result['members'] = self._muc_members[muc_id].values()
+        return result
+
+    def get_muc_by_jid(self, muc_jid):
+        return self.get_muc(self.itemId(muc_jid.getStripped()))
 
     def muc_invite_handler(self, dis, message):
         for item in message.getTags('x'):
@@ -67,6 +89,53 @@ class XMPPRoster(xmpp.roster.Roster):
                 muc_jid = message.getFrom()
                 if self.getItemByJID(invited_by_jid) is not None and muc_jid is not None:
                     self.join_muc_by_jid(muc_jid)
+
+    def muc_user_handler(self, dis, pres):
+        print(pres)
+
+        muc_jid = xmpp.protocol.JID(pres.getFrom())
+        item_id = self.itemId(muc_jid.getStripped())
+        member_id = muc_jid.getResource()
+
+        pres_muc_user = pres.getTag('x', namespace=NS_MUC_USER)
+        pres_item = pres_muc_user.getTag('item')
+        muc_user_jid = xmpp.JID(pres_item.getAttr('jid'))
+
+        typ = pres.getType()
+
+        if typ is None:
+            if item_id not in self._muc_list:
+                self._new_muc_roster_item(muc_jid.getStripped())
+
+            muc = self._muc_list[item_id]
+            muc['event_id'] = self.id_generator.id()
+
+            if muc_user_jid.getStripped() != self._owner.jid.getStripped():
+                member_contact_id = self.itemId(muc_user_jid.getStripped())
+                if member_contact_id not in self._data:
+                    member_contact_id = None
+
+                muc_members = self._muc_members[item_id]
+                muc_members[member_id] = {'jid': muc_user_jid.getStripped(),
+                                          'member_id': member_id,
+                                          'contact_id': member_contact_id,
+                                          'name': member_id}
+                print(muc_members)
+
+        elif typ == 'unavailable':
+            if self._owner.jid.getStripped() == muc_user_jid.getStripped():
+                del self._muc_members[item_id]
+                del self._muc_list[item_id]
+            else:
+                if item_id in self._muc_members:
+                    muc_members = self._muc_members[item_id]
+                    del muc_members[member_id]
+
+                    if item_id in self._muc_list:
+                        muc = self._muc_list[item_id]
+                        muc['event_id'] = self.id_generator.id()
+
+                    print(muc_members)
 
     def RosterIqHandler(self, dis, stanza):
         """ Subscription tracker. Used internally for setting items state in
@@ -115,8 +184,13 @@ class XMPPRoster(xmpp.roster.Roster):
     def PresenceHandler(self, dis, pres):
         """ Presence tracker. Used internally for setting items' resources state in
             internal roster representation. """
+
         jid = xmpp.protocol.JID(pres.getFrom())
         item_id = self.itemId(jid.getStripped())
+
+        if pres.getTag('x', namespace=NS_MUC_USER) is not None:
+            self.muc_user_handler(dis, pres)
+            return  # MUC should not be processed here
 
         if self.self_jid == jid.getStripped():
             self.DEBUG('Presence from own clients')
@@ -127,7 +201,7 @@ class XMPPRoster(xmpp.roster.Roster):
         typ = pres.getType()
 
         if not typ:
-            self.DEBUG('Setting roster item %s for resource %s...' % (jid.getStripped(),jid.getResource()), 'ok')
+            self.DEBUG('Setting roster item %s for resource %s...' % (jid.getStripped(), jid.getResource()), 'ok')
             if jid.getResource() not in roster_item_resources:
                 roster_item_resources[jid.getResource()] = {'priority': 0, 'show': 'online',
                                                             'status': None, 'nick': None}
@@ -175,7 +249,7 @@ class XMPPRoster(xmpp.roster.Roster):
 
         if item_id in self._data:
             roster_item = self._data[item_id]
-            roster_item['event_id']=self.id_generator.id()
+            roster_item['event_id'] = self.id_generator.id()
             roster_item['show'] = current_resource['show']
             roster_item['status'] = current_resource['status']
             internal_data['nick'] = current_resource['nick']
@@ -265,9 +339,44 @@ class XMPPRoster(xmpp.roster.Roster):
 
         return self.setItem(contact['jid'], name=name, groups=groups)
 
+    def muc_jid_by_id(self, muc_id):
+        if muc_id in self._muc_list:
+            return xmpp.JID(self._muc_list[muc_id]['jid'])
+        else:
+            return None
+
+    def item_jid_by_id(self, contact_id):
+        if contact_id in self._data:
+            return xmpp.JID(self._data[contact_id]['jid'])
+        else:
+            return None
+
     def join_muc_by_jid(self, muc_jid):
         user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
                                          resource=self._owner.jid.node)
         muc = xmpp.protocol.Protocol(name='x', xmlns=NS_MUC)
         pres = xmpp.protocol.Presence(to=user_muc_jid, payload=[muc])
         return self._owner.send(pres)
+
+    def leave_muc_by_jid(self, muc_jid):
+        user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
+                                         resource=self._owner.jid.node)
+        pres = xmpp.protocol.Presence(to=user_muc_jid, typ='unavailable')
+        print 'Presence', pres
+        return self._owner.send(pres)
+
+    def leave_muc(self, muc_id):
+        muc_jid = self.muc_jid_by_id(muc_id)
+        return self.leave_muc_by_jid(muc_jid)
+
+    def invite_to_muc_by_jid(self, muc_jid, member_jid):
+        invite = xmpp.protocol.Protocol(name='invite', to=member_jid.getStripped())
+        x = xmpp.protocol.Protocol(name='x', xmlns='http://jabber.org/protocol/muc#user', payload=[invite])
+        invite_message = xmpp.protocol.Message(to=muc_jid, payload=[x])
+        print(invite_message)
+        return self._owner.send(invite_message)
+
+    def invite_to_muc(self, muc_id, contact_id):
+        muc_jid = self.muc_jid_by_id(muc_id)
+        contact_jid = self.item_jid_by_id(contact_id)
+        return self.invite_to_muc_by_jid(muc_jid, contact_jid)

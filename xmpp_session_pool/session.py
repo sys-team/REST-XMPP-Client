@@ -91,11 +91,23 @@ class XMPPSession(object):
     def remove_contact(self, contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
 
-    def create_muc(self, muc_id, name):
-        self.xmpp_client.create_muc(muc_id=muc_id, name=name)
+    def muc(self, muc_id):
+        return self.xmpp_client.muc(muc_id=muc_id)
 
-    def muc_by_id(self, muc_id):
-        return self.xmpp_client.muc_by_id(muc_id=muc_id)
+    def create_muc(self, muc_node, name):
+        self.xmpp_client.create_muc(muc_node=muc_node, name=name)
+
+    def muc_by_node(self, muc_node):
+        return self.xmpp_client.muc_by_node(muc_node=muc_node)
+
+    def remove_muc(self, muc_id):
+        return self.xmpp_client.remove_muc(muc_id=muc_id)
+
+    def update_muc(self, muc_id, name=None, members=None):
+        self.xmpp_client.update_muc(muc_id=muc_id, name=name, members=members)
+
+    def set_muc_read_offset(self, muc_id, read_offset):
+        self.xmpp_client.set_muc_read_offset(muc_id=muc_id, read_offset=read_offset)
 
     def wait_for_notification(self, callback):
         self.notification_queue.put_nowait(callback)
