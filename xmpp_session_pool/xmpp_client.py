@@ -324,7 +324,9 @@ class XMPPClient(xmpp.Client):
         if self.roster.join_muc_by_jid(muc_jid) is None:
             raise XMPPSendError()
         self.apply_properties_to_muc(muc_jid, name)
-        self.roster.invite_to_muc_by_jid(muc_jid, xmpp.JID('aluzar@jab4all.com'))
+
+    def update_muc(self, muc_id, name=None):
+        pass
 
     def muc_by_node(self, muc_node=None):
         muc_jid = xmpp.protocol.JID(node=muc_node, domain='conference.' + self.jid.domain)
@@ -337,6 +339,10 @@ class XMPPClient(xmpp.Client):
     def invite_to_muc(self, muc_id, contact_id):
         if self.roster.invite_to_muc(muc_id, contact_id) is None:
             raise XMPPSendError()
+
+    def invite_many_to_muc(self, muc_id, contact_list=[]):
+        for contact_id in contact_list:
+            self.invite_to_muc(muc_id, contact_id)
 
     def apply_properties_to_muc(self, muc_jid, name):
         property_dict = {'FORM_TYPE': 'http://jabber.org/protocol/muc#roomconfig',

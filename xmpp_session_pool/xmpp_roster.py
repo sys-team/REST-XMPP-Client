@@ -120,7 +120,6 @@ class XMPPRoster(xmpp.roster.Roster):
                                           'member_id': member_id,
                                           'contact_id': member_contact_id,
                                           'name': member_id}
-                print(muc_members)
 
         elif typ == 'unavailable':
             if self._owner.jid.getStripped() == muc_user_jid.getStripped():
@@ -134,8 +133,6 @@ class XMPPRoster(xmpp.roster.Roster):
                     if item_id in self._muc_list:
                         muc = self._muc_list[item_id]
                         muc['event_id'] = self.id_generator.id()
-
-                    print(muc_members)
 
     def RosterIqHandler(self, dis, stanza):
         """ Subscription tracker. Used internally for setting items state in

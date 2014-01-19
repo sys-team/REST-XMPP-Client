@@ -381,9 +381,15 @@ class MucHandler(XMPPClientHandler):
 
         try:
             updated_muc = yield self.async_worker.submit(self.put_muc, session, muc_id, json_body)
-            self.response['contacts'] = [updated_muc]
+            self.response['muc'] = [updated_muc]
         except KeyError:
             self.raise_muc_error(muc_id)
+
+        #waiting for invited users join MUC
+        if 'muc' in json_body and json_body['muc'].get('invite') is not None:
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=2000), (yield gen.Callback("wait")))
+            yield gen.Wait("wait")
+            self.response['muc'] = [session.muc(muc_id)]
 
         self.write(self.response)
 
@@ -405,6 +411,8 @@ class MucHandler(XMPPClientHandler):
             session.update_muc(muc_id, name=muc['name'])
         if 'read_offset' in muc:
             session.set_muc_read_offset(muc_id, muc['read_offset'])
+        if 'invite' in muc:
+            session.invite_to_muc(muc_id, contact_list=muc['invite'])
 
         return session.muc(muc_id)
 

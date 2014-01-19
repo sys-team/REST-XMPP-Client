@@ -103,8 +103,11 @@ class XMPPSession(object):
     def remove_muc(self, muc_id):
         return self.xmpp_client.remove_muc(muc_id=muc_id)
 
-    def update_muc(self, muc_id, name=None, members=None):
-        self.xmpp_client.update_muc(muc_id=muc_id, name=name, members=members)
+    def update_muc(self, muc_id, name=None):
+        self.xmpp_client.update_muc(muc_id=muc_id, name=name)
+
+    def invite_to_muc(self, muc_id, contact_list=[]):
+        self.xmpp_client.invite_many_to_muc(muc_id, contact_list=contact_list)
 
     def set_muc_read_offset(self, muc_id, read_offset):
         self.xmpp_client.set_muc_read_offset(muc_id=muc_id, read_offset=read_offset)

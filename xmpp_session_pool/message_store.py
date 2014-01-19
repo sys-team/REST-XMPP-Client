@@ -27,6 +27,8 @@ class XMPPMessagesStore(PlugIn):
         if message_text is None:
             return
 
+        print event
+
         jid_from = event.getFrom().getStripped()
         contact_id = self._owner.getRoster().itemId(jid_from)
         contact = self._owner.getRoster().getItem(contact_id)
