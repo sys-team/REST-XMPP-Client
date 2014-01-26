@@ -4,6 +4,7 @@ __author__ = 'v.kovtash@gmail.com'
 import time
 from xmpp.client import PlugIn
 import itertools
+import xmpp
 
 
 class XMPPMessagesStore(PlugIn):
@@ -18,16 +19,45 @@ class XMPPMessagesStore(PlugIn):
         """ Register presence and subscription trackers in the owner's dispatcher.
        Also request roster from server if the 'request' argument is set.
        Used internally."""
-        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_message_handler, makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_groupchat_message_handler, 'groupchat', makefirst=True)
+        self._owner.Dispatcher.RegisterHandler('message', self.xmpp_message_handler, 'chat', makefirst=True)
         self._owner.Dispatcher.RegisterHandler('message', self.xmpp_delivery_status_handler, ns='urn:xmpp:receipts',
                                                makefirst=True)
+
+    def xmpp_groupchat_message_handler(self, con, event):
+        message_text = event.getBody()
+        if message_text is None:
+            return
+
+        jid = event.getFrom()
+        muc_jid = jid.getStripped()
+        member_id = jid.getResource()
+
+        muc_id = self._owner.getRoster().itemId(muc_jid)
+        muc = self._owner.getRoster().get_muc(muc_id)
+
+        if muc is None:
+            return
+
+        message_id = event.getID()
+
+        if member_id == self._owner.muc_member_id:  # Own message received. Mark as delivered
+            if message_id is not None and muc_id in self.chats_store:
+                for message in self.chats_store[muc_id]:
+                    if not message['inbound'] and message['message_id'] == message_id:
+                        message['delivered'] = True
+                        message['event_id'] = self.id_generator.id()
+        else:
+            if message_id is None:
+                message_id = self.id_generator.id()
+
+            self.append_message(contact_id=muc_id, inbound=True, text=message_text, message_id=message_id,
+                                resource_id=member_id)
 
     def xmpp_message_handler(self, con, event):
         message_text = event.getBody()
         if message_text is None:
             return
-
-        print event
 
         jid_from = event.getFrom().getStripped()
         contact_id = self._owner.getRoster().itemId(jid_from)
@@ -58,7 +88,8 @@ class XMPPMessagesStore(PlugIn):
                         message['delivered'] = True
                         message['event_id'] = self.id_generator.id()
 
-    def append_message(self, contact_id, inbound, text, message_id = None, delivery_receipt_asked=False):
+    def append_message(self, contact_id, inbound, text, message_id=None,
+                       delivery_receipt_asked=False, delivered=False, resource_id=None):
         if contact_id not in self.chats_store:
             self.chats_store[contact_id] = []
 
@@ -71,8 +102,9 @@ class XMPPMessagesStore(PlugIn):
                          'text': text,
                          'timestamp': timestamp,
                          'contact_id': contact_id,
+                         'resource_id': resource_id,
                          'message_id': message_id,
-                         'delivered': False,
+                         'delivered': delivered,
                          'delivery_receipt_asked': delivery_receipt_asked
         })
 

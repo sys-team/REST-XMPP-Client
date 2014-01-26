@@ -350,14 +350,14 @@ class XMPPRoster(xmpp.roster.Roster):
 
     def join_muc_by_jid(self, muc_jid):
         user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
-                                         resource=self._owner.jid.node)
+                                         resource=self._owner.muc_member_id)
         muc = xmpp.protocol.Protocol(name='x', xmlns=NS_MUC)
         pres = xmpp.protocol.Presence(to=user_muc_jid, payload=[muc])
         return self._owner.send(pres)
 
     def leave_muc_by_jid(self, muc_jid):
         user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
-                                         resource=self._owner.jid.node)
+                                         resource=self._owner.muc_member_id)
         pres = xmpp.protocol.Presence(to=user_muc_jid, typ='unavailable')
         print 'Presence', pres
         return self._owner.send(pres)
@@ -377,3 +377,18 @@ class XMPPRoster(xmpp.roster.Roster):
         muc_jid = self.muc_jid_by_id(muc_id)
         contact_jid = self.item_jid_by_id(contact_id)
         return self.invite_to_muc_by_jid(muc_jid, contact_jid)
+
+    def set_muc_read_offset(self, muc_id, read_offset):
+        if muc_id in self._muc_list and 'read_offset' in self._muc_list[muc_id]:
+            muc = self._muc_list[muc_id]
+            if read_offset > muc['read_offset']:
+                muc['read_offset'] = read_offset
+                muc['event_id'] = self.id_generator.id()
+                return True
+        return False
+
+    def get_muc_read_offset(self, muc_id):
+        if muc_id in self._muc_list and 'read_offset' in self._muc_list[muc_id]:
+            return self._muc_list[muc_id]['read_offset']
+        else:
+            return 0

@@ -456,6 +456,45 @@ class ContactMessagesHandler(XMPPClientHandler):
         self.write(self.response)
 
 
+class MucMessagesHandler(XMPPClientHandler):
+    def get(self, session_id, muc_id):
+        """
+            Request parameters:
+                offset - returns messages with event_id greater that offset
+        """
+        self.check_muc_id(muc_id)
+        session = self.get_session(session_id)
+        offset = self.get_offset()
+
+        try:
+            self.response['messages'] = session.messages(contact_ids=[muc_id], event_offset=offset)
+        except TypeError:
+            self.raise_muc_error(muc_id)
+
+        self.write(self.response)
+
+    @gen.coroutine
+    def post(self, session_id, muc_id):
+        json_body = self.get_body()
+        try:
+            message = json_body['messages']['text']
+        except KeyError:
+            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
+            raise web.HTTPError(400)
+
+        self.check_muc_id(muc_id)
+        session = self.get_session(session_id)
+
+        try:
+            self.response['messages'] = yield self.async_worker.submit(session.send, muc_id, message)
+        except XMPPSendError:
+            self.raise_message_sending_error()
+        except TypeError:
+            self.raise_muc_error(muc_id)
+
+        self.write(self.response)
+
+
 class ServerStatusHandler(XMPPClientHandler):
     def get(self):
         response = {}

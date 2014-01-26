@@ -8,14 +8,16 @@ from event_id import XMPPSessionEventID
 from errors import XMPPAuthError, XMPPConnectionError, XMPPRosterError, XMPPSendError
 from message_store import XMPPMessagesStore
 
+
 class XMPPClient(xmpp.Client):
     def __init__(self, jid, password, server, port=5222):
         self.jid = xmpp.protocol.JID(jid)
+        self.muc_member_id = self.jid.node
         self._Password = password
         self._User = self.jid.getNode()
         self._Resource = self.jid.getResource()
-        self._Server = (server,port)
-        self.Namespace ='jabber:client'
+        self._Server = (server, port)
+        self.Namespace = 'jabber:client'
         self.DBG = xmpp.client.DBG_CLIENT
         xmpp.Client.__init__(self,self.jid.getDomain(), port, debug=[])
         self._DEBUG = xmpp.Debug.NoDebug()
@@ -49,8 +51,10 @@ class XMPPClient(xmpp.Client):
         self.Dispatcher.PlugOut()
         if self.__dict__.has_key('HTTPPROXYsocket'): self.HTTPPROXYsocket.PlugOut()
         if self.__dict__.has_key('TCPsocket'): self.TCPsocket.PlugOut()
-        if not self.connect(server=self._Server,proxy=self._Proxy): return
-        if not self.auth(self._User,self._Password,self._Resource): return
+        if not self.connect(server=self._Server,proxy=self._Proxy):
+            return
+        if not self.auth(self._User,self._Password,self._Resource):
+            return
         self.Dispatcher.restoreHandlers(handlerssave)
         self.Dispatcher.RegisterDefaultHandler(defaulHandler)
         return self.connected
@@ -60,7 +64,7 @@ class XMPPClient(xmpp.Client):
         while not self.isConnected() and retry_count:
             self.reconnectAndReauth()
             retry_count -= 1
-        if  self.isConnected():
+        if self.isConnected():
             self._connected()
             self.sendInitPresence()
             self.getRoster()
@@ -85,6 +89,7 @@ class XMPPClient(xmpp.Client):
 
     def _xmpp_presence_handler(self, con, event):
         self.post_contacts_notification()
+        self.post_mucs_notification()
 
     def _xmpp_error_handler(self, con, event):
         logging.debug(u'XMPPError : %s ',event)
@@ -102,7 +107,7 @@ class XMPPClient(xmpp.Client):
             self.post_message_notification(contact_id, message_text, inbound=True)
         else:
             received = event.getTag('received')
-            if received is not None: #delivery report received
+            if received is not None:  # delivery report received
                 message_id = received.getAttr('id')
                 if message_id is not None:
                     jid_from = event.getFrom().getStripped()
@@ -115,7 +120,7 @@ class XMPPClient(xmpp.Client):
 
     @property
     def message_storage(self):
-        if not self.__dict__.has_key('XMPPMessagesStore'):
+        if 'XMPPMessagesStore' not in self.__dict__:
             XMPPMessagesStore(self.id_generator).PlugIn(self)
         return self.XMPPMessagesStore
 
@@ -133,7 +138,7 @@ class XMPPClient(xmpp.Client):
             if not auth:
                 raise XMPPAuthError()
 
-            self.message_storage #Create message storage and register its handlers before registering self handlers
+            self.message_storage  # Create message storage and register its handlers before registering self handlers
 
             self.Dispatcher.RegisterHandler('presence', self._xmpp_presence_handler)
             self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler,'set', xmpp.protocol.NS_ROSTER)
@@ -199,6 +204,12 @@ class XMPPClient(xmpp.Client):
             if callable(contacts_updated_notification):
                 contacts_updated_notification()
 
+    def post_mucs_notification(self):
+        for observer in self._event_observers:
+            mucs_updated_notification = getattr(observer, 'mucs_updated_notification', None)
+            if callable(mucs_updated_notification):
+                mucs_updated_notification()
+
     def post_unread_count_notification(self):
         for observer in self._event_observers:
             unread_count_updated_notification = getattr(observer, 'unread_count_updated_notification', None)
@@ -209,8 +220,32 @@ class XMPPClient(xmpp.Client):
         return self.message_storage.messages(contact_ids=contact_ids, event_offset=event_offset)
 
     def send_message(self, contact_id, message):
-        jid = self.roster.getItem(contact_id)['jid']
-        return self.send_message_by_jid(jid, message)
+        contact = self.roster.getItem(contact_id)
+        if contact:
+            return self.send_message_by_jid(contact["jid"], message)
+
+        contact = self.roster.get_muc(contact_id)
+        if contact:
+            return self.send_muc_message_by_jid(contact["jid"], message)
+
+        raise XMPPSendError()
+
+    def send_muc_message_by_jid(self, jid, message):
+        if self.isConnected():
+            message_stanza = xmpp.protocol.Message(to=jid, body=message, typ='groupchat')
+            logging.debug(u"XMPPEvent : %s" % message_stanza)
+            muc_id = self.getRoster().itemId(jid)
+            message_id = self.send(message_stanza)
+            if not id:
+                raise XMPPSendError()
+
+            result = self.message_storage.append_message(contact_id=muc_id, inbound=False,
+                                                         text=message, message_id=message_id,
+                                                         resource_id=self.muc_member_id)
+            self.post_message_notification(contact_id=muc_id, message_text=message, inbound=False )
+            return result
+        else:
+            raise XMPPSendError()
 
     def send_message_by_jid(self, jid, message):
         if self.isConnected():
@@ -343,6 +378,13 @@ class XMPPClient(xmpp.Client):
     def invite_many_to_muc(self, muc_id, contact_list=[]):
         for contact_id in contact_list:
             self.invite_to_muc(muc_id, contact_id)
+
+    def set_muc_read_offset(self, muc_id, read_offset):
+        old_unread_count_value = self.unread_count
+        if self.roster.set_muc_read_offset(muc_id, read_offset):
+            self.post_mucs_notification()
+        if old_unread_count_value != self.unread_count:
+            self.post_unread_count_notification()
 
     def apply_properties_to_muc(self, muc_jid, name):
         property_dict = {'FORM_TYPE': 'http://jabber.org/protocol/muc#roomconfig',

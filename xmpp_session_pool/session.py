@@ -44,6 +44,9 @@ class XMPPSession(object):
     def contacts_updated_notification(self):
         self.notify_observers()
 
+    def mucs_updated_notification(self):
+        self.notify_observers()
+
     def unread_count_updated_notification(self):
         self.im_client.push_notification(sound=False)
 

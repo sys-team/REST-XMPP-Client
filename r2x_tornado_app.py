@@ -8,7 +8,7 @@ import tornado.ioloop
 import tornado.web
 from tornado_app import MainHandler, StartSession, SessionHandler, SessionContactsHandler, SessionMessagesHandler, \
     SessionFeedHandler, SessionNotificationHandler, ContactHandler, ContactMessagesHandler, ServerStatusHandler, \
-    SessionMUCsHandler, MucHandler
+    SessionMUCsHandler, MucHandler, MucMessagesHandler
 
 
 class TornadoApp(object):
@@ -29,9 +29,10 @@ class TornadoApp(object):
         self._app = tornado.web.Application([
             (r"/sessions/([^/]*)/notification", SessionNotificationHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
             (r"/sessions/([^/]*)/feed", SessionFeedHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
-            (r"/sessions/([^/]*)/contacts", SessionContactsHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
             (r"/sessions/([^/]*)/mucs", SessionMUCsHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
             (r"/sessions/([^/]*)/muc/([^/]*)", MucHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
+            (r"/sessions/([^/]*)/muc/([^/]*)/messages", MucMessagesHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
+            (r"/sessions/([^/]*)/contacts", SessionContactsHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
             (r"/sessions/([^/]*)/contacts/([^/]*)", ContactHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
             (r"/sessions/([^/]*)/contacts/([^/]*)/messages", ContactMessagesHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
             (r"/sessions/([^/]*)/messages", SessionMessagesHandler, dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker)),
