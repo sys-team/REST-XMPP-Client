@@ -340,6 +340,7 @@ class XMPPClient(xmpp.Client):
 
     def remove_contact(self, contact_id):
         item = self.roster.getItem(contact_id)
+        self.message_storage.remove_messages_for_contact(contact_id)
         if item is not None and 'jid' in item:
             self.roster.delItem(item['jid'])
 
