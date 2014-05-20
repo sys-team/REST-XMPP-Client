@@ -353,6 +353,8 @@ class ContactHandler(XMPPClientHandler):
             session.update_contact(contact_id, name=contact['name'])
         if 'read_offset' in contact:
             session.set_contact_read_offset(contact_id, contact['read_offset'])
+        if 'history_offset' in contact:
+            session.set_contact_history_offset(contact_id, contact['history_offset'])
         if 'authorization' in contact:
             session.set_contact_authorization(contact_id, contact['authorization'])
 
@@ -411,10 +413,12 @@ class MucHandler(XMPPClientHandler):
             session.update_muc(muc_id, name=muc['name'])
         if 'read_offset' in muc:
             session.set_muc_read_offset(muc_id, muc['read_offset'])
+        if 'history_offset' in muc:
+            session.set_muc_history_offset(muc_id, muc['history_offset'])
         if 'invite' in muc:
-            session.invite_to_muc(muc_id, contact_list=muc['invite'])
+            session.invite_to_muc(self, muc_id, muc['invite'])
 
-        return session.muc(muc_id)
+        return session.contact(muc_id)
 
 
 class ContactMessagesHandler(XMPPClientHandler):

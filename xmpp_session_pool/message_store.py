@@ -95,9 +95,11 @@ class XMPPMessagesStore(PlugIn):
 
         messages = []
         event_id = self.id_generator.id()
+        sort_id = self.id_generator.id()
         timestamp = time.time()
 
         messages.append({'event_id': event_id,
+                         'sort_id': sort_id,
                          'inbound': inbound,
                          'text': text,
                          'timestamp': timestamp,
@@ -140,6 +142,9 @@ class XMPPMessagesStore(PlugIn):
     def all_messages(self):
         return self.chats_store.copy()
 
-    def remove_messages_for_contact(self, contact_id):
+    def remove_messages_for_contact(self, contact_id, sort_offset=None):
         if contact_id in self.chats_store:
-            del self.chats_store[contact_id]
+            if sort_offset is None:
+                del self.chats_store[contact_id]
+            else:
+                self.chats_store[contact_id] = filter(lambda message: message['sort_id'] > sort_offset, self.chats_store[contact_id])

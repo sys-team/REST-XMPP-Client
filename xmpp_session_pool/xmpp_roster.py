@@ -276,19 +276,40 @@ class XMPPRoster(xmpp.roster.Roster):
             return self._internal_data[item_id]['resources'][resource][dataname]
 
     def setItemReadOffset(self, item_id, read_offset):
-        if item_id in self._data and 'read_offset' in self._data[item_id]:
-            item = self._data[item_id]
-            if read_offset > item['read_offset']:
-                item['read_offset'] = read_offset
-                item['event_id'] = self.id_generator.id()
-                return True
+        if item_id not in self._data:
+            return False
+
+        item = self._data[item_id]
+        if 'read_offset' not in item or read_offset > item['read_offset']:
+            item['read_offset'] = read_offset
+            item['event_id'] = self.id_generator.id()
+            return True
+
         return False
 
     def getItemReadOffset(self, item_id):
         if item_id in self._data and 'read_offset' in self._data[item_id]:
             return self._data[item_id]['read_offset']
-        else:
-            return 0
+
+        return 0
+
+    def setItemHistoryOffset(self, item_id, history_offset):
+        if item_id not in self._data:
+            return False
+
+        item = self._data[item_id]
+        if 'history_offset' not in item or history_offset > item['history_offset']:
+            item['history_offset'] = history_offset
+            item['event_id'] = self.id_generator.id()
+            return True
+
+        return False
+
+    def getItemHistoryOffset(self, item_id):
+        if item_id in self._data and 'history_offset' in self._data[item_id]:
+            return self._data[item_id]['history_offset']
+
+        return 0
 
     def getContacts(self, event_offset=None):
         contacts = self.getRawRoster().values()
@@ -339,14 +360,14 @@ class XMPPRoster(xmpp.roster.Roster):
     def muc_jid_by_id(self, muc_id):
         if muc_id in self._muc_list:
             return xmpp.JID(self._muc_list[muc_id]['jid'])
-        else:
-            return None
+
+        return None
 
     def item_jid_by_id(self, contact_id):
         if contact_id in self._data:
             return xmpp.JID(self._data[contact_id]['jid'])
-        else:
-            return None
+
+        return None
 
     def join_muc_by_jid(self, muc_jid):
         user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
@@ -359,7 +380,6 @@ class XMPPRoster(xmpp.roster.Roster):
         user_muc_jid = xmpp.protocol.JID(node=muc_jid.node, domain=muc_jid.domain,
                                          resource=self._owner.muc_member_id)
         pres = xmpp.protocol.Presence(to=user_muc_jid, typ='unavailable')
-        print 'Presence', pres
         return self._owner.send(pres)
 
     def leave_muc(self, muc_id):
@@ -370,7 +390,6 @@ class XMPPRoster(xmpp.roster.Roster):
         invite = xmpp.protocol.Protocol(name='invite', to=member_jid.getStripped())
         x = xmpp.protocol.Protocol(name='x', xmlns='http://jabber.org/protocol/muc#user', payload=[invite])
         invite_message = xmpp.protocol.Message(to=muc_jid, payload=[x])
-        print(invite_message)
         return self._owner.send(invite_message)
 
     def invite_to_muc(self, muc_id, contact_id):
@@ -379,9 +398,9 @@ class XMPPRoster(xmpp.roster.Roster):
         return self.invite_to_muc_by_jid(muc_jid, contact_jid)
 
     def set_muc_read_offset(self, muc_id, read_offset):
-        if muc_id in self._muc_list and 'read_offset' in self._muc_list[muc_id]:
+        if muc_id in self._muc_list:
             muc = self._muc_list[muc_id]
-            if read_offset > muc['read_offset']:
+            if 'read_offset' not in self._muc_list[muc_id] or read_offset > muc['read_offset']:
                 muc['read_offset'] = read_offset
                 muc['event_id'] = self.id_generator.id()
                 return True
@@ -390,5 +409,23 @@ class XMPPRoster(xmpp.roster.Roster):
     def get_muc_read_offset(self, muc_id):
         if muc_id in self._muc_list and 'read_offset' in self._muc_list[muc_id]:
             return self._muc_list[muc_id]['read_offset']
-        else:
-            return 0
+
+        return 0
+
+    def set_muc_history_offset(self, muc_id, history_offset):
+        if muc_id not in self._muc_list:
+            return False
+
+        muc = self._muc_list[muc_id]
+        if 'history_offset' not in muc or history_offset > muc['history_offset']:
+            muc['history_offset'] = history_offset
+            muc['event_id'] = self.id_generator.id()
+            return True
+
+        return False
+
+    def get_muc_history_offset(self, muc_id):
+        if muc_id in self._muc_list and 'history_offset' in self._muc_list[muc_id]:
+            return self._muc_list[muc_id]['history_offset']
+
+        return 0

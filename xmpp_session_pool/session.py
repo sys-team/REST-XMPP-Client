@@ -85,6 +85,9 @@ class XMPPSession(object):
     def set_contact_read_offset(self, contact_id, read_offset):
         self.xmpp_client.set_contact_read_offset(contact_id=contact_id, read_offset=read_offset)
 
+    def set_contact_history_offset(self, contact_id, history_offset):
+        self.xmpp_client.set_contact_history_offset(contact_id=contact_id, history_offset=history_offset)
+
     def set_contact_authorization(self, contact_id, authorization):
         self.xmpp_client.set_contact_authorization(contact_id=contact_id, authorization=authorization)
 
@@ -114,6 +117,9 @@ class XMPPSession(object):
 
     def set_muc_read_offset(self, muc_id, read_offset):
         self.xmpp_client.set_muc_read_offset(muc_id=muc_id, read_offset=read_offset)
+
+    def set_muc_history_offset(self, contact_id, history_offset):
+        self.xmpp_client.set_muc_history_offset(contact_id=contact_id, history_offset=history_offset)
 
     def wait_for_notification(self, callback):
         self.notification_queue.put_nowait(callback)

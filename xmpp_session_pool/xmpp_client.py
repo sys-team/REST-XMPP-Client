@@ -308,7 +308,7 @@ class XMPPClient(xmpp.Client):
         for contact in self.roster.getRawRoster().values():
             if (contact['id'] in chats_store
                 and chats_store[contact['id']][-1]['inbound']
-                and contact['read_offset'] < chats_store[contact['id']][-1]['event_id']):
+                and contact['read_offset'] < chats_store[contact['id']][-1]['sort_id']):
                 unread_count += 1
 
         return unread_count
@@ -319,6 +319,14 @@ class XMPPClient(xmpp.Client):
             self.post_contacts_notification()
         if old_unread_count_value != self.unread_count:
             self.post_unread_count_notification()
+
+    def set_contact_history_offset(self, contact_id, history_offset):
+        if self.roster.setItemHistoryOffset(contact_id, history_offset):
+            old_unread_count_value = self.unread_count
+            self.message_storage.remove_messages_for_contact(contact_id, sort_offset=self.roster.getItemHistoryOffset(contact_id))
+            self.post_contacts_notification()
+            if old_unread_count_value != self.unread_count:
+                self.post_unread_count_notification()
 
     def set_contact_authorization(self, contact_id, authorization):
         roster = self.roster
@@ -369,6 +377,7 @@ class XMPPClient(xmpp.Client):
         return self.roster.get_muc_by_jid(muc_jid)
 
     def remove_muc(self, muc_id):
+        self.message_storage.remove_messages_for_contact(muc_id)
         if self.roster.leave_muc(muc_id) is None:
             raise XMPPSendError()
 
@@ -386,6 +395,14 @@ class XMPPClient(xmpp.Client):
             self.post_mucs_notification()
         if old_unread_count_value != self.unread_count:
             self.post_unread_count_notification()
+
+    def set_muc_history_offset(self, muc_id, history_offset):
+        if self.roster.set_muc_history_offset(muc_id, history_offset):
+            old_unread_count_value = self.unread_count
+            self.message_storage.remove_messages_for_contact(muc_id, sort_offset=self.roster.get_muc_history_offset(muc_id))
+            self.post_mucs_notification()
+            if old_unread_count_value != self.unread_count:
+                self.post_unread_count_notification()
 
     def apply_properties_to_muc(self, muc_jid, name):
         property_dict = {'FORM_TYPE': 'http://jabber.org/protocol/muc#roomconfig',
