@@ -305,11 +305,13 @@ class XMPPClient(xmpp.Client):
     def unread_count(self):
         unread_count = 0
         chats_store = self.message_storage.chats_store
-        for contact in self.roster.getRawRoster().values():
-            if (contact['id'] in chats_store
-                and chats_store[contact['id']][-1]['inbound']
-                and contact['read_offset'] < chats_store[contact['id']][-1]['sort_id']):
-                unread_count += 1
+        for contact in self.roster.get_contacts_and_mucs():
+            if contact['id'] in chats_store:
+                messages = chats_store[contact['id']]
+                if (len(messages) > 0 and
+                        messages[-1]['inbound'] and
+                        contact['read_offset'] < messages[-1]['sort_id']):
+                    unread_count += 1
 
         return unread_count
 
@@ -351,6 +353,12 @@ class XMPPClient(xmpp.Client):
         self.message_storage.remove_messages_for_contact(contact_id)
         if item is not None and 'jid' in item:
             self.roster.delItem(item['jid'])
+
+    def mucs(self, event_offset=None):
+        if not self.isConnected():
+            raise XMPPRosterError()
+
+        return self.roster.get_mucs(event_offset=event_offset)
 
     def muc(self, muc_id):
         if self.isConnected():
