@@ -429,3 +429,12 @@ class XMPPRoster(xmpp.roster.Roster):
             return self._muc_list[muc_id]['history_offset']
 
         return 0
+
+    def get_mucs(self, event_offset=None):
+        mucs = self._muc_list.values()
+        if event_offset is not None:
+            mucs = filter(lambda muc: muc['event_id'] > event_offset, mucs)
+        return mucs
+
+    def get_contacts_and_mucs(self, event_offset=None):
+        return self.getContacts(event_offset=event_offset) + self.get_mucs(event_offset=event_offset)
