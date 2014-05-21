@@ -224,6 +224,17 @@ class SessionContactsHandler(XMPPClientHandler):
 
 
 class SessionMUCsHandler(XMPPClientHandler):
+    def get(self, session_id):
+        """
+            Request parameters:
+                offset - returns mucs which has been changed since offset or has messages with event_id greater than offset
+        """
+        session = self.get_session(session_id)
+        offset = self.get_offset()
+
+        self.response['mucs'] = session.mucs(event_offset=offset)
+        self.write(self.response)
+
     @gen.coroutine
     def post(self, session_id):
         json_body = self.get_body()
@@ -282,15 +293,20 @@ class SessionFeedHandler(XMPPClientHandler):
         should_wait = self.get_should_wait()
         session = self.get_session(session_id)
 
-        self.response['contacts'] = session.contacts(event_offset=offset)
-        self.response['messages'] = session.messages(event_offset=offset)
+        contacts = session.contacts(event_offset=offset)
+        mucs = session.mucs(event_offset=offset)
+        messages = session.messages(event_offset=offset)
 
-        if (not (len(self.response['contacts'])+len(self.response['messages'])) and should_wait):
-            session.wait_for_notification(callback = (yield gen.Callback("notification")))
+        if not len(contacts) + len(mucs) + len(messages) and should_wait:
+            session.wait_for_notification(callback=(yield gen.Callback("notification")))
             yield gen.Wait("notification")
-            session = self.get_session(session_id)
-            self.response['contacts'] = session.contacts(event_offset=offset)
-            self.response['messages'] = session.messages(event_offset=offset)
+            contacts = session.contacts(event_offset=offset)
+            mucs = session.mucs(event_offset=offset)
+            messages = session.messages(event_offset=offset)
+
+        self.response['contacts'] = contacts
+        self.response['mucs'] = mucs
+        self.response['messages'] = messages
         self.write(self.response)
         self.finish()
 
@@ -321,7 +337,7 @@ class ContactHandler(XMPPClientHandler):
     def put(self, session_id, contact_id):
         json_body = self.get_body()
         if 'contact' not in json_body:
-            self.response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+            self.response['error'] = {'code': 'XMPPServiceParametersError','text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         self.check_contact_id(contact_id)
