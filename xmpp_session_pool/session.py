@@ -97,6 +97,9 @@ class XMPPSession(object):
     def remove_contact(self, contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
 
+    def mucs(self, event_offset=None):
+        return self.xmpp_client.mucs(event_offset=event_offset)
+
     def muc(self, muc_id):
         return self.xmpp_client.muc(muc_id=muc_id)
 
