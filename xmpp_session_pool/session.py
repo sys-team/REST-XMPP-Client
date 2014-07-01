@@ -28,7 +28,6 @@ class XMPPSession(object):
 
     def message_appended_notification(self, contact_id, message_text, inbound):
         contact = self.xmpp_client.contact(contact_id)
-
         if message_text is not None and contact is not None:
             self.notify_observers()
             if inbound:
@@ -36,7 +35,8 @@ class XMPPSession(object):
                     message_body = message_text
                 else:
                     message_body = None
-                self.im_client.push_notification(message=message_body, contact_name=contact['name'], contact_id=contact_id)
+                self.im_client.push_notification(message=message_body, contact_name=contact['name'],
+                                                 contact_id=contact_id)
 
     def message_delivered_notification(self, contact_id, message_id):
         self.notify_observers()

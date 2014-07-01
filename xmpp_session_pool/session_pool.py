@@ -89,4 +89,5 @@ class IMClient(object):
         if self.push_token is None or self.push_sender is None:
             return
         unread_count = sum(session.unread_count for session in self.sessions.values())
-        self.push_sender.notify(token=self.push_token,message=message,unread_count=unread_count,contact_name=contact_name,contact_id=contact_id,sound=sound)
+        self.push_sender.notify(token=self.push_token, message=message, unread_count=unread_count,
+                                contact_name=contact_name, contact_id=contact_id, sound=sound)
