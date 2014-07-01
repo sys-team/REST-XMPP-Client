@@ -67,21 +67,20 @@ class XMPPClient(xmpp.Client):
         if self.isConnected():
             self._connected()
             self.sendInitPresence()
-            self.getRoster()
         else:
             self.close()
 
     def getRoster(self):
         """ Return the Roster instance, previously plugging it in and
             requesting roster from server if needed. """
-        if not self.__dict__.has_key('Roster'):
+        if not self.__dict__.has_key('XMPPRoster'):
             XMPPRoster(self.id_generator).PlugIn(self)
-        return self.Roster.getRoster()
+        return self.XMPPRoster.getRoster()
 
     def sendPresence(self,jid=None,typ=None,requestRoster=0):
         """ Send some specific presence state.
             Can also request roster from server if according agrument is set."""
-        if requestRoster: XMPPRoster(self.id_generator).PlugIn(self)
+        if requestRoster: self.getRoster()
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
     def _debugging_handler(self, con, event):
@@ -148,11 +147,6 @@ class XMPPClient(xmpp.Client):
 
             if not self.error_state:
                 self.sendInitPresence()
-            else:
-                raise XMPPConnectionError(self.Server)
-
-            if not self.error_state:
-                self.getRoster()
             else:
                 raise XMPPConnectionError(self.Server)
 
