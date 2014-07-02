@@ -21,7 +21,7 @@ class XMPPSessionPool(object):
         if jid not in self.xmpp_client_pool:
             xmpp_client = XMPPClient(jid=jid, password=password, server=server)
             xmpp_client.setup_connection()
-            xmpp_dispatcher = xmpp_inbound_dispatchers.XMPPTornadoMainIOLoopDispatcher(xmpp_client)
+            xmpp_dispatcher = xmpp_inbound_dispatchers.XMPPTornadoIOStreamDispatcher(xmpp_client)
             xmpp_dispatcher.start()
 
             self.xmpp_client_pool[jid] = xmpp_dispatcher

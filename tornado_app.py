@@ -8,7 +8,6 @@ import os
 
 
 class MainHandler(web.RequestHandler):
-    @gen.coroutine
     def head(self):
         pass
 
@@ -158,11 +157,10 @@ class SessionHandler(XMPPClientHandler):
 
         self.write(self.response)
 
-    @gen.coroutine
     def delete(self, session_id):
         self.get_session(session_id)
         try:
-            result = yield self.async_worker.submit(self.session_pool.close_session, session_id)
+            result = self.session_pool.close_session(session_id)
         except KeyError:
             self.response['error'] = {'code': 'XMPPSessionError', 'text': 'There is no session with id %s'%session_id}
             raise web.HTTPError(404)
@@ -206,7 +204,7 @@ class SessionContactsHandler(XMPPClientHandler):
         contact = json_body['contact']
         session = self.get_session(session_id)
         jid = contact.get('jid')
-        contact_added = yield self.async_worker.submit(session.add_contact, jid, contact.get('name'))
+        contact_added = session.add_contact(jid, contact.get('name'))
 
         timeout = 5.0
         while timeout and contact_added is None:
@@ -333,7 +331,6 @@ class ContactHandler(XMPPClientHandler):
             self.raise_contact_error(contact_id)
         self.write(self.response)
 
-    @gen.coroutine
     def put(self, session_id, contact_id):
         json_body = self.get_body()
         if 'contact' not in json_body:
@@ -344,20 +341,19 @@ class ContactHandler(XMPPClientHandler):
         session = self.get_session(session_id)
 
         try:
-            updated_contact = yield self.async_worker.submit(self.put_contact, session, contact_id, json_body)
+            updated_contact = self.put_contact(session, contact_id, json_body)
             self.response['contacts'] = [updated_contact]
         except KeyError:
             self.raise_contact_error(contact_id)
 
         self.write(self.response)
 
-    @gen.coroutine
     def delete(self, session_id, contact_id):
         self.check_contact_id(contact_id)
         session = self.get_session(session_id)
 
         try:
-            yield self.async_worker.submit(session.remove_contact, contact_id)
+            session.remove_contact(contact_id)
         except TypeError:
             self.raise_contact_error(contact_id)
 
@@ -454,7 +450,6 @@ class ContactMessagesHandler(XMPPClientHandler):
 
         self.write(self.response)
 
-    @gen.coroutine
     def post(self, session_id, contact_id):
         json_body = self.get_body()
         try:
@@ -467,7 +462,7 @@ class ContactMessagesHandler(XMPPClientHandler):
         session = self.get_session(session_id)
 
         try:
-            self.response['messages'] = yield self.async_worker.submit(session.send, contact_id, message)
+            self.response['messages'] = session.send(contact_id, message)
         except XMPPSendError:
             self.raise_message_sending_error()
         except TypeError:
