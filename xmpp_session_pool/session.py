@@ -38,6 +38,18 @@ class XMPPSession(object):
                 self.im_client.push_notification(message=message_body, contact_name=contact['name'],
                                                  contact_id=contact_id)
 
+    def muc_message_appended_notification(self, muc_id, member_id, message_text, inbound):
+        muc = self.xmpp_client.muc(muc_id)
+        if message_text is not None and muc is not None:
+            self.notify_observers()
+            if inbound:
+                if self.should_send_message_body:
+                    message_body = message_text
+                else:
+                    message_body = None
+                self.im_client.push_notification(message=message_body, contact_name=muc['name'],
+                                                 contact_id=muc_id)
+
     def message_delivered_notification(self, contact_id, message_id):
         self.notify_observers()
 
@@ -121,8 +133,8 @@ class XMPPSession(object):
     def set_muc_read_offset(self, muc_id, read_offset):
         self.xmpp_client.set_muc_read_offset(muc_id=muc_id, read_offset=read_offset)
 
-    def set_muc_history_offset(self, contact_id, history_offset):
-        self.xmpp_client.set_muc_history_offset(contact_id=contact_id, history_offset=history_offset)
+    def set_muc_history_offset(self, muc_id, history_offset):
+        self.xmpp_client.set_muc_history_offset(muc_id=muc_id, history_offset=history_offset)
 
     def wait_for_notification(self, callback):
         self.notification_queue.put_nowait(callback)

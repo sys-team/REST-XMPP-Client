@@ -238,7 +238,6 @@ class SessionMUCsHandler(XMPPClientHandler):
     @gen.coroutine
     def post(self, session_id):
         json_body = self.get_body()
-        print 'body', json_body
         if 'muc' not in json_body:
             self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
@@ -255,9 +254,7 @@ class SessionMUCsHandler(XMPPClientHandler):
             ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
             yield gen.Wait("wait")
             timeout -= 0.5
-            print 'Check muc', muc_node
             muc_added = session.muc_by_node(muc_node)
-            print 'MUC added', muc_added
 
         if muc_added is not None:
             self.response['mucs'] = [muc_added]
@@ -399,7 +396,7 @@ class MucHandler(XMPPClientHandler):
 
         try:
             updated_muc = yield self.async_worker.submit(self.put_muc, session, muc_id, json_body)
-            self.response['muc'] = [updated_muc]
+            self.response['mucs'] = [updated_muc]
         except KeyError:
             self.raise_muc_error(muc_id)
 
@@ -407,7 +404,7 @@ class MucHandler(XMPPClientHandler):
         if 'muc' in json_body and json_body['muc'].get('invite') is not None:
             ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=2000), (yield gen.Callback("wait")))
             yield gen.Wait("wait")
-            self.response['muc'] = [session.muc(muc_id)]
+            self.response['mucs'] = [session.muc(muc_id)]
 
         self.write(self.response)
 
@@ -434,7 +431,7 @@ class MucHandler(XMPPClientHandler):
         if 'invite' in muc:
             session.invite_to_muc(self, muc_id, muc['invite'])
 
-        return session.contact(muc_id)
+        return session.muc(muc_id)
 
 
 class ContactMessagesHandler(XMPPClientHandler):

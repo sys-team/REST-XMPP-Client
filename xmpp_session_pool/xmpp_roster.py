@@ -91,15 +91,9 @@ class XMPPRoster(xmpp.roster.Roster):
                     self.join_muc_by_jid(muc_jid)
 
     def muc_user_handler(self, dis, pres):
-        print(pres)
-
         muc_jid = xmpp.protocol.JID(pres.getFrom())
         item_id = self.itemId(muc_jid.getStripped())
         member_id = muc_jid.getResource()
-
-        pres_muc_user = pres.getTag('x', namespace=NS_MUC_USER)
-        pres_item = pres_muc_user.getTag('item')
-        muc_user_jid = xmpp.JID(pres_item.getAttr('jid'))
 
         typ = pres.getType()
 
@@ -109,20 +103,23 @@ class XMPPRoster(xmpp.roster.Roster):
 
             muc = self._muc_list[item_id]
             muc['event_id'] = self.id_generator.id()
+            member_contact_id = None
 
-            if muc_user_jid.getStripped() != self._owner.jid.getStripped():
-                member_contact_id = self.itemId(muc_user_jid.getStripped())
-                if member_contact_id not in self._data:
-                    member_contact_id = None
+            if member_id != self._owner.muc_member_id:
+                muc_user_jid_string = pres.getTag('x', namespace=NS_MUC_USER).getTag('item').getAttr('jid')
+                if muc_user_jid_string is not None:
+                    muc_user_jid = xmpp.JID(muc_user_jid_string)
+                    member_contact_id = self.itemId(muc_user_jid.getStripped())
+                    if member_contact_id not in self._data:
+                        member_contact_id = None
 
-                muc_members = self._muc_members[item_id]
-                muc_members[member_id] = {'jid': muc_user_jid.getStripped(),
-                                          'member_id': member_id,
-                                          'contact_id': member_contact_id,
-                                          'name': member_id}
+            muc_members = self._muc_members[item_id]
+            muc_members[member_id] = {'member_id': member_id,
+                                      'contact_id': member_contact_id,
+                                      'name': member_id}
 
         elif typ == 'unavailable':
-            if self._owner.jid.getStripped() == muc_user_jid.getStripped():
+            if member_id == self._owner.muc_member_id:
                 del self._muc_members[item_id]
                 del self._muc_list[item_id]
             else:

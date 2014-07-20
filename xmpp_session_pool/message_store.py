@@ -45,7 +45,7 @@ class XMPPMessagesStore(PlugIn):
             if message_id is not None and muc_id in self.chats_store:
                 for message in self.chats_store[muc_id]:
                     if not message['inbound'] and message['message_id'] == message_id:
-                        message['delivered'] = True
+                        message['delivered'] = False
                         message['event_id'] = self.id_generator.id()
         else:
             if message_id is None:

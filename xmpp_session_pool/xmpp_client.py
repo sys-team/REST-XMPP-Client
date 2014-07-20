@@ -100,18 +100,22 @@ class XMPPClient(xmpp.Client):
 
     def _xmpp_message_handler(self, con, event):
         message_text = event.getBody()
-        if message_text is not None:
-            jid_from = event.getFrom().getStripped()
-            contact_id = self.roster.itemId(jid_from)
-            self.post_message_notification(contact_id, message_text, inbound=True)
+        if event.getType() == 'groupchat':
+            muc_id = self.roster.itemId(event.getFrom().getStripped())
+            self.post_muc_message_notification(muc_id, event.getFrom().getResource(), message_text, inbound=True)
         else:
-            received = event.getTag('received')
-            if received is not None:  # delivery report received
-                message_id = received.getAttr('id')
-                if message_id is not None:
-                    jid_from = event.getFrom().getStripped()
-                    contact_id = self.roster.itemId(jid_from)
-                    self.post_delivery_report_notification(contact_id, message_id)
+            if message_text is not None:
+                jid_from = event.getFrom().getStripped()
+                contact_id = self.roster.itemId(jid_from)
+                self.post_message_notification(contact_id, message_text, inbound=True)
+            else:
+                received = event.getTag('received')
+                if received is not None:  # delivery report received
+                    message_id = received.getAttr('id')
+                    if message_id is not None:
+                        jid_from = event.getFrom().getStripped()
+                        contact_id = self.roster.itemId(jid_from)
+                        self.post_delivery_report_notification(contact_id, message_id)
 
     @property
     def roster(self):
@@ -143,7 +147,7 @@ class XMPPClient(xmpp.Client):
             self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler,'set', xmpp.protocol.NS_ROSTER)
             self.Dispatcher.RegisterHandler('message', self._xmpp_message_handler)
             self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
-            self.Dispatcher.RegisterHandler('iq', self._xmpp_error_handler,'error', xmpp.protocol.NS_ROSTER)
+            self.Dispatcher.RegisterHandler('iq', self._xmpp_error_handler, 'error', xmpp.protocol.NS_ROSTER)
 
             if not self.error_state:
                 self.sendInitPresence()
@@ -185,6 +189,12 @@ class XMPPClient(xmpp.Client):
             message_appended_notification = getattr(observer, 'message_appended_notification', None)
             if callable(message_appended_notification):
                 message_appended_notification(contact_id, message_text, inbound)
+
+    def post_muc_message_notification(self, muc_id, member_id, message_text, inbound=True):
+        for observer in self._event_observers:
+            muc_message_appended_notification = getattr(observer, 'muc_message_appended_notification', None)
+            if callable(muc_message_appended_notification):
+                muc_message_appended_notification(muc_id, member_id, message_text, inbound)
 
     def post_delivery_report_notification(self, contact_id, message_id):
         for observer in self._event_observers:
@@ -441,7 +451,6 @@ class XMPPClient(xmpp.Client):
         properties_iq = xmpp.protocol.Iq(typ='set', to=muc_jid,
                                          queryNS='http://jabber.org/protocol/muc#owner',
                                          payload=[form])
-        print(properties_iq)
         if self.send(properties_iq) is None:
             raise XMPPSendError()
 
