@@ -77,14 +77,16 @@ class XMPPClient(xmpp.Client):
             XMPPRoster(self.id_generator).PlugIn(self)
         return self.XMPPRoster.getRoster()
 
-    def sendPresence(self,jid=None,typ=None,requestRoster=0):
+    def sendPresence(self, jid=None, typ=None, requestRoster=0):
         """ Send some specific presence state.
             Can also request roster from server if according agrument is set."""
-        if requestRoster: self.getRoster()
+        if requestRoster:
+            self.getRoster()
         self.send(xmpp.dispatcher.Presence(to=jid, typ=typ))
 
-    def _debugging_handler(self, con, event):
-        logging.debug(u'XMPPEvent : %s ',event)
+    @staticmethod
+    def _debugging_handler(con, event):
+        logging.debug(u'XMPPEvent : %s ', event)
 
     def _xmpp_presence_handler(self, con, event):
         self.post_contacts_notification()
@@ -98,24 +100,25 @@ class XMPPClient(xmpp.Client):
             self.error_state = True
             self.close()
 
-    def _xmpp_message_handler(self, con, event):
+    def _xmpp_chat_message_handler(self, con, event):
         message_text = event.getBody()
-        if event.getType() == 'groupchat':
-            muc_id = self.roster.itemId(event.getFrom().getStripped())
-            self.post_muc_message_notification(muc_id, event.getFrom().getResource(), message_text, inbound=True)
+        if message_text is not None:
+            jid_from = event.getFrom().getStripped()
+            contact_id = self.roster.itemId(jid_from)
+            self.post_message_notification(contact_id, message_text, inbound=True)
         else:
-            if message_text is not None:
-                jid_from = event.getFrom().getStripped()
-                contact_id = self.roster.itemId(jid_from)
-                self.post_message_notification(contact_id, message_text, inbound=True)
-            else:
-                received = event.getTag('received')
-                if received is not None:  # delivery report received
-                    message_id = received.getAttr('id')
-                    if message_id is not None:
-                        jid_from = event.getFrom().getStripped()
-                        contact_id = self.roster.itemId(jid_from)
-                        self.post_delivery_report_notification(contact_id, message_id)
+            received = event.getTag('received')
+            if received is not None:  # delivery report received
+                message_id = received.getAttr('id')
+                if message_id is not None:
+                    jid_from = event.getFrom().getStripped()
+                    contact_id = self.roster.itemId(jid_from)
+                    self.post_delivery_report_notification(contact_id, message_id)
+
+    def _xmpp_group_chat_message_handler(self, con, event):
+        message_text = event.getBody()
+        muc_id = self.roster.itemId(event.getFrom().getStripped())
+        self.post_muc_message_notification(muc_id, event.getFrom().getResource(), message_text, inbound=True)
 
     @property
     def roster(self):
@@ -137,17 +140,18 @@ class XMPPClient(xmpp.Client):
 
             self._connected()
 
-            auth = self.auth(self._User,self._Password,self._Resource)
+            auth = self.auth(self._User, self._Password, self._Resource)
             if not auth:
                 raise XMPPAuthError()
 
-            self.message_storage  # Create message storage and register its handlers before registering self handlers
-
             self.Dispatcher.RegisterHandler('presence', self._xmpp_presence_handler)
-            self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler,'set', xmpp.protocol.NS_ROSTER)
-            self.Dispatcher.RegisterHandler('message', self._xmpp_message_handler)
+            self.Dispatcher.RegisterHandler('iq', self._xmpp_presence_handler, 'set', xmpp.protocol.NS_ROSTER)
+            self.Dispatcher.RegisterHandler('message', self._xmpp_group_chat_message_handler, 'groupchat')
+            self.Dispatcher.RegisterHandler('message', self._xmpp_chat_message_handler, 'chat')
             self.Dispatcher.RegisterDefaultHandler(self._debugging_handler)
             self.Dispatcher.RegisterHandler('iq', self._xmpp_error_handler, 'error', xmpp.protocol.NS_ROSTER)
+
+            self.message_storage  #Creating and plugging in
 
             if not self.error_state:
                 self.sendInitPresence()
@@ -310,11 +314,10 @@ class XMPPClient(xmpp.Client):
         unread_count = 0
         chats_store = self.message_storage.chats_store
         for contact in self.roster.get_contacts_and_mucs():
-            if contact['id'] in chats_store:
-                messages = chats_store[contact['id']]
-                if (len(messages) > 0 and
-                        messages[-1]['inbound'] and
-                        contact['read_offset'] < messages[-1]['sort_id']):
+            messages = chats_store.get(contact['id'])
+            if messages is not None and len(messages) > 0:
+                last_message = messages[-1]
+                if last_message['inbound'] and contact['read_offset'] < last_message['sort_id']:
                     unread_count += 1
 
         return unread_count

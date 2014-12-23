@@ -7,6 +7,7 @@ from xmpp_client import XMPPClient
 from errors import XMPPAuthError
 import xmpp_inbound_dispatchers
 
+
 class XMPPSessionPool(object):
     def __init__(self, debug=False, push_sender=None):
         self.session_pool = {}
@@ -70,6 +71,7 @@ class XMPPSessionPool(object):
         if self.push_sender is not None:
             self.push_sender.stop()
 
+
 class IMClient(object):
     def __init__(self, client_id, push_token=None, push_sender=None):
         self.client_id = client_id
@@ -85,7 +87,7 @@ class IMClient(object):
     def session_closed(self, session):
         del self.sessions[session.jid]
 
-    def push_notification(self,message=None,contact_name=None,contact_id=None,sound=True):
+    def push_notification(self, message=None, contact_name=None, contact_id=None, sound=True):
         if self.push_token is None or self.push_sender is None:
             return
         unread_count = sum(session.unread_count for session in self.sessions.values())
