@@ -24,30 +24,32 @@ class NotificationAbstract(object):
     def stop(self):
         pass
 
-    def notify(self, token=None, message=None, unread_count=None, max_message_len=100, message_cut_end='...', contact_name=None, contact_id=None, sound=True):
+    def notify(self, token=None, message=None, unread_count=None,
+               max_message_len=100, message_cut_end='...',
+               contact_name=None, contact_id=None, sound=True):
         if token is None:
             return
 
         full_message = None
-        if  message is not None or contact_name is not None:
+        if message is not None or contact_name is not None:
             full_message_parts = []
             if contact_name is not None:
                 full_message_parts.append(contact_name)
 
-                if  message is not None:
+                if message is not None:
                     full_message_parts.append(': ')
 
-            if  message is not None:
+            if message is not None:
                 full_message_parts.append(message)
 
             full_message = ''.join(full_message_parts)
 
         aps_message = {'aps':{}}
 
-        if  sound:
+        if sound:
             aps_message['aps']['sound'] = 'chime'
 
-        if  full_message is not None:
+        if full_message is not None:
             aps_message['aps']['alert'] = ''
 
         if unread_count is not None:
@@ -57,11 +59,11 @@ class NotificationAbstract(object):
             aps_message['im'] = {}
             aps_message['im']['contact_id'] = contact_id
 
-        if  full_message is not None:
+        if full_message is not None:
             payload = json.dumps(aps_message, ensure_ascii = False).encode('utf-8')
             max_payload_len = 250 - len(payload)
 
-            if  len(full_message) > max_message_len:
+            if len(full_message) > max_message_len:
                 full_message = full_message[:max_message_len] + message_cut_end
 
             if len(full_message.encode('utf-8')) > max_payload_len:
@@ -81,7 +83,7 @@ class NotificationAbstract(object):
 
 class APNWSGINotification(threading.Thread, NotificationAbstract):
     def __init__(self, host, app_id):
-        if  host is None or app_id is None:
+        if host is None or app_id is None:
             raise ValueError
         self.push_url = os.path.join(host, app_id)
         super(APNWSGINotification, self).__init__()
@@ -111,11 +113,11 @@ class APNWSGINotification(threading.Thread, NotificationAbstract):
                 child_process.join(10)
 
     def perform_notification(self, token,aps_message):
-        self.notifications.put({'token':token,'message':json.dumps(aps_message)})
+        self.notifications.put({'token':token, 'message':json.dumps(aps_message)})
 
 
 class PyAPNSNotification(threading.Thread, NotificationAbstract):
-    def __init__(self, host, app_id, cert_file, dev_mode = False, reconnect_interval=10, chunk_size=10):
+    def __init__(self, host, cert_file, app_id, dev_mode = False, reconnect_interval=10, chunk_size=10):
         super(PyAPNSNotification, self).__init__()
         self.keepRunning = True
         self.is_server_ready = False
@@ -125,7 +127,7 @@ class PyAPNSNotification(threading.Thread, NotificationAbstract):
         self.app_id = app_id
         self.cert_file = cert_file
         self.chunk_size = chunk_size
-        if  dev_mode:
+        if dev_mode:
             self.mode = 'sandbox'
         else:
             self.mode = 'production'
@@ -166,11 +168,11 @@ class PyAPNSNotification(threading.Thread, NotificationAbstract):
             except Exception:
                 self.is_server_ready = False
                 for i in xrange(len(tokens)):
-                    self.notifications.put({'token':tokens[i],'message':messages[i]})
+                    self.notifications.put({'token': tokens[i],'message': messages[i]})
 
     def stop(self):
         self.keepRunning = False
         self.notifications.put(None)
 
     def perform_notification(self, token, aps_message):
-        self.notifications.put({'token':token,'message':aps_message})
+        self.notifications.put({'token': token, 'message': aps_message})

@@ -7,6 +7,7 @@ from xmpp_client import XMPPClient
 from errors import XMPPAuthError
 import xmpp_inbound_dispatchers
 
+
 class XMPPSessionPool(object):
     def __init__(self, debug=False, push_sender=None):
         self.session_pool = {}
@@ -21,7 +22,7 @@ class XMPPSessionPool(object):
         if jid not in self.xmpp_client_pool:
             xmpp_client = XMPPClient(jid=jid, password=password, server=server)
             xmpp_client.setup_connection()
-            xmpp_dispatcher = xmpp_inbound_dispatchers.XMPPTornadoIOStreamDispatcher(xmpp_client)
+            xmpp_dispatcher = xmpp_inbound_dispatchers.XMPPTornadoMainIOLoopDispatcher(xmpp_client)
             xmpp_dispatcher.start()
 
             self.xmpp_client_pool[jid] = xmpp_dispatcher
@@ -66,9 +67,10 @@ class XMPPSessionPool(object):
 
     def clean(self):
         for session_key in self.session_pool.keys():
-            self.close_session(session_key,with_notification=True)
+            self.close_session(session_key, with_notification=True)
         if self.push_sender is not None:
             self.push_sender.stop()
+
 
 class IMClient(object):
     def __init__(self, client_id, push_token=None, push_sender=None):
@@ -85,8 +87,9 @@ class IMClient(object):
     def session_closed(self, session):
         del self.sessions[session.jid]
 
-    def push_notification(self,message=None,contact_name=None,contact_id=None,sound=True):
+    def push_notification(self, message=None, contact_name=None, contact_id=None, sound=True):
         if self.push_token is None or self.push_sender is None:
             return
         unread_count = sum(session.unread_count for session in self.sessions.values())
-        self.push_sender.notify(token=self.push_token,message=message,unread_count=unread_count,contact_name=contact_name,contact_id=contact_id,sound=sound)
+        self.push_sender.notify(token=self.push_token, message=message, unread_count=unread_count,
+                                contact_name=contact_name, contact_id=contact_id, sound=sound)

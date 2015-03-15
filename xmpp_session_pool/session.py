@@ -5,6 +5,7 @@ import uuid
 import logging
 from Queue import Queue
 
+
 class XMPPSession(object):
     def __init__(self, session_id, xmpp_client, im_client):
         self.session_id = session_id
@@ -27,20 +28,35 @@ class XMPPSession(object):
 
     def message_appended_notification(self, contact_id, message_text, inbound):
         contact = self.xmpp_client.contact(contact_id)
-
-        if  message_text is not None and contact is not None:
+        if message_text is not None and contact is not None:
             self.notify_observers()
             if inbound:
                 if self.should_send_message_body:
                     message_body = message_text
                 else:
                     message_body = None
-                self.im_client.push_notification(message=message_body, contact_name=contact['name'], contact_id=contact_id)
+                self.im_client.push_notification(message=message_body, contact_name=contact['name'],
+                                                 contact_id=contact_id)
+
+    def muc_message_appended_notification(self, muc_id, member_id, message_text, inbound):
+        muc = self.xmpp_client.muc(muc_id)
+        if message_text is not None and muc is not None:
+            self.notify_observers()
+            if inbound:
+                if self.should_send_message_body:
+                    message_body = message_text
+                else:
+                    message_body = None
+                self.im_client.push_notification(message=message_body, contact_name=muc['name'],
+                                                 contact_id=muc_id)
 
     def message_delivered_notification(self, contact_id, message_id):
         self.notify_observers()
 
     def contacts_updated_notification(self):
+        self.notify_observers()
+
+    def mucs_updated_notification(self):
         self.notify_observers()
 
     def unread_count_updated_notification(self):
@@ -68,18 +84,21 @@ class XMPPSession(object):
 
     def contact(self, contact_id):
         contact = self.xmpp_client.contact(contact_id)
-        if  contact is None:
+        if contact is None:
             raise KeyError
         return contact
 
     def add_contact(self, jid, name=None, groups=[]):
-        self.xmpp_client.add_contact(jid=jid, name=name, groups=groups)
+        return self.xmpp_client.add_contact(jid=jid, name=name, groups=groups)
 
     def update_contact(self, contact_id, name=None, groups=None):
         self.xmpp_client.update_contact(contact_id=contact_id, name=name, groups=groups)
 
     def set_contact_read_offset(self, contact_id, read_offset):
         self.xmpp_client.set_contact_read_offset(contact_id=contact_id, read_offset=read_offset)
+
+    def set_contact_history_offset(self, contact_id, history_offset):
+        self.xmpp_client.set_contact_history_offset(contact_id=contact_id, history_offset=history_offset)
 
     def set_contact_authorization(self, contact_id, authorization):
         self.xmpp_client.set_contact_authorization(contact_id=contact_id, authorization=authorization)
@@ -89,6 +108,33 @@ class XMPPSession(object):
 
     def remove_contact(self, contact_id):
         self.xmpp_client.remove_contact(contact_id=contact_id)
+
+    def mucs(self, event_offset=None):
+        return self.xmpp_client.mucs(event_offset=event_offset)
+
+    def muc(self, muc_id):
+        return self.xmpp_client.muc(muc_id=muc_id)
+
+    def create_muc(self, muc_node, name):
+        self.xmpp_client.create_muc(muc_node=muc_node, name=name)
+
+    def muc_by_node(self, muc_node):
+        return self.xmpp_client.muc_by_node(muc_node=muc_node)
+
+    def remove_muc(self, muc_id):
+        return self.xmpp_client.remove_muc(muc_id=muc_id)
+
+    def update_muc(self, muc_id, name=None):
+        self.xmpp_client.update_muc(muc_id=muc_id, name=name)
+
+    def invite_to_muc(self, muc_id, contact_list=[]):
+        self.xmpp_client.invite_many_to_muc(muc_id, contact_list=contact_list)
+
+    def set_muc_read_offset(self, muc_id, read_offset):
+        self.xmpp_client.set_muc_read_offset(muc_id=muc_id, read_offset=read_offset)
+
+    def set_muc_history_offset(self, muc_id, history_offset):
+        self.xmpp_client.set_muc_history_offset(muc_id=muc_id, history_offset=history_offset)
 
     def wait_for_notification(self, callback):
         self.notification_queue.put_nowait(callback)

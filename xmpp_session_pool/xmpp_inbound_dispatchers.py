@@ -2,7 +2,6 @@ __author__ = 'kovtash'
 
 import logging
 from tornado import ioloop
-from tornado import iostream
 import threading
 import xmpp
 from errors import XMPPConnectionError
@@ -83,7 +82,6 @@ class XMPPTornadoIOLoopDispatcher(object):
     def stop(self):
         self.client.close()
 
-
 class XMPPTornadoMainIOLoopDispatcher(object):
     def __init__(self, client):
         super(XMPPTornadoMainIOLoopDispatcher, self).__init__()
@@ -119,61 +117,6 @@ class XMPPTornadoMainIOLoopDispatcher(object):
             self.client.close()
         except Exception as e:
             logging.exception(e)
-
-    def start(self):
-        self._connected()
-
-    def stop(self):
-        self.client.close()
-
-
-class XMPPTornadoIOStream(iostream.IOStream):
-    def __init__(self, client, *args, **kwargs):
-        self.client=client
-        TCPSocketPlugin = self.client.__dict__['TCPsocket']
-
-        super(XMPPTornadoIOStream, self).__init__(TCPSocketPlugin._sock, *args, **kwargs)
-
-        if '_sslObj' in TCPSocketPlugin.__dict__:
-            self.write_to_fd = self.ssl_write_to_fd
-
-        TCPSocketPlugin._send = self.write
-        self._add_io_state(self.io_loop.READ)
-
-    def _handle_read(self):
-        try:
-            self.client.Process()
-        except xmpp.protocol.StreamError:
-            self.client.close()
-        except Exception as e:
-            logging.exception(e)
-
-    def ssl_write_to_fd(self, data):
-        self.client.Connection._sslObj.write(data)
-
-
-class XMPPTornadoIOStreamDispatcher(object):
-    def __init__(self, client):
-        super(XMPPTornadoIOStreamDispatcher, self).__init__()
-        self.client = client
-        self.iostream = None
-        client.RegisterConnectHandler(self._connected)
-        client.RegisterDisconnectHandler(self._disconnected)
-
-    def _connected(self):
-        if self.iostream is not None:
-            self.iostream.close()
-
-        if 'TCPsocket' not in self.client.__dict__ or '_sock' not in self.client.TCPsocket.__dict__:
-            self.stop()
-            raise XMPPConnectionError
-
-        self.iostream = XMPPTornadoIOStream(self.client, io_loop=ioloop.IOLoop.instance())
-
-    def _disconnected(self):
-        if self.iostream is not None:
-            self.iostream.close()
-            self.iostream = None
 
     def start(self):
         self._connected()
