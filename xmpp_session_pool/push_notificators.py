@@ -113,11 +113,11 @@ class APNWSGINotification(threading.Thread, NotificationAbstract):
                 child_process.join(10)
 
     def perform_notification(self, token,aps_message):
-        self.notifications.put({'token':token,'message':json.dumps(aps_message)})
+        self.notifications.put({'token':token, 'message':json.dumps(aps_message)})
 
 
 class PyAPNSNotification(threading.Thread, NotificationAbstract):
-    def __init__(self, host, app_id, cert_file, dev_mode = False, reconnect_interval=10, chunk_size=10):
+    def __init__(self, host, cert_file, app_id, dev_mode = False, reconnect_interval=10, chunk_size=10):
         super(PyAPNSNotification, self).__init__()
         self.keepRunning = True
         self.is_server_ready = False

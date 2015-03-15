@@ -23,7 +23,8 @@ class XMPPClientHandler(web.RequestHandler):
         self.write(self.response)
 
     def raise_value_error(self, parameter_name):
-        self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Parameter %s has wrong value' % parameter_name}
+        self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                  'text': 'Parameter %s has wrong value' % parameter_name}
         raise web.HTTPError(400)
 
     def raise_message_sending_error(self):
@@ -31,21 +32,25 @@ class XMPPClientHandler(web.RequestHandler):
         raise web.HTTPError(404)
 
     def raise_contact_error(self, contact_id):
-        self.response['error'] = {'code': 'XMPPContactError', 'text': 'There is no contact with id %s' % contact_id}
+        self.response['error'] = {'code': 'XMPPContactError',
+                                  'text': 'There is no contact with id %s' % contact_id}
         raise web.HTTPError(404)
 
     def raise_muc_error(self, muc_id):
-        self.response['error'] = {'code': 'XMPPContactError', 'text': 'There is no MUC with id %s' % muc_id}
+        self.response['error'] = {'code': 'XMPPContactError',
+                                  'text': 'There is no MUC with id %s' % muc_id}
         raise web.HTTPError(404)
 
     def check_contact_id(self, contact_id):
         if contact_id is None:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing contact_id parameter'}
+            self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                      'text': 'Missing contact_id parameter'}
             raise web.HTTPError(400)
 
     def check_muc_id(self, muc_id):
         if muc_id is None:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing muc_id parameter'}
+            self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                      'text': 'Missing muc_id parameter'}
             raise web.HTTPError(400)
 
     def get_header(self, header_name):
@@ -78,19 +83,22 @@ class XMPPClientHandler(web.RequestHandler):
 
     def get_session(self, session_id):
         if session_id is None:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing session_id parameter'}
+            self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                      'text': 'Missing session_id parameter'}
             raise web.HTTPError(400)
 
         auth_header = self.get_header('Authorization')
 
         if auth_header is None:
-            self.response['error'] = {'code': 'XMPPAuthError', 'text': 'No authorization information provided'}
+            self.response['error'] = {'code': 'XMPPAuthError',
+                                      'text': 'No authorization information provided'}
             raise web.HTTPError(502)
 
         try:
             session = self.session_pool.session_for_id(session_id)
         except KeyError:
-            self.response['error'] = {'code': 'XMPPSessionError', 'text': 'There is no session with id %s' % session_id}
+            self.response['error'] = {'code': 'XMPPSessionError',
+                                      'text': 'There is no session with id %s' % session_id}
             raise web.HTTPError(404)
 
         if not auth_header[7:] == session.token:
@@ -101,13 +109,15 @@ class XMPPClientHandler(web.RequestHandler):
 
     def get_body(self):
         if self.request.body is None:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing request body'}
+            self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                      'text': 'Missing request body'}
             raise web.HTTPError(400)
         else:
             try:
                 body = json.loads(self.request.body)
             except ValueError:
-                self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Not a valid JSON format'}
+                self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                          'text': 'Not a valid JSON format'}
                 raise web.HTTPError(400)
             return body
 
@@ -122,20 +132,28 @@ class StartSession(XMPPClientHandler):
         client_id = self.get_argument('client_id', default=None)
 
         if jid is None or password is None or server is None:
-            self.response['error'] = {'code':'XMPPServiceParametersError', 'text':'Missing required parameters'}
+            self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                      'text': 'Missing required parameters'}
             raise web.HTTPError(400)
 
         try:
-            session_id = yield self.async_worker.submit(self.session_pool.start_session, jid=jid, password=password, server=server, push_token=push_token, im_client_id=client_id)
-            self.response['session'] = {'session_id':session_id}
+            session_id = yield self.async_worker.submit(self.session_pool.start_session, jid=jid,
+                                                        password=password, server=server,
+                                                        push_token=push_token,
+                                                        im_client_id=client_id)
+            self.response['session'] = {'session_id': session_id}
         except XMPPAuthError:
-            self.response['error'] = {'code':'XMPPUpstreamAuthError', 'text':'Can\'t authenticate on XMPP server with jid %s'%jid}
+            self.response['error'] = \
+                {'code': 'XMPPUpstreamAuthError',
+                 'text': 'Can\'t authenticate on XMPP server with jid %s' % jid}
             raise web.HTTPError(502)
         except XMPPConnectionError as error:
-            self.response['error'] = {'code':'XMPPUpstreamConnectionError', 'text':'Can\'t connect to XMPP server %s'%error.server}
+            self.response['error'] = {'code': 'XMPPUpstreamConnectionError',
+                                      'text': 'Can\'t connect to XMPP server %s' % error.server}
             raise web.HTTPError(502)
         except XMPPSendError:
-            self.response['error'] = {'code':'XMPPUpstreamConnectionError', 'text':'Message was not sent'}
+            self.response['error'] = \
+                {'code': 'XMPPUpstreamConnectionError', 'text': 'Message was not sent'}
             raise web.HTTPError(502)
 
         try:
@@ -143,7 +161,8 @@ class StartSession(XMPPClientHandler):
             self.response['session']['token'] = session.token
             self.response['session']['jid'] = session.jid
         except KeyError:
-            self.response['error'] = {'code':'XMPPSessionError', 'text':'There is no session with id %s'%session_id}
+            self.response['error'] = \
+                {'code': 'XMPPSessionError', 'text': 'There is no session with id %s' % session_id}
             raise web.HTTPError(404)
 
         self.write(self.response)
@@ -162,20 +181,22 @@ class SessionHandler(XMPPClientHandler):
     def delete(self, session_id):
         self.get_session(session_id)
         try:
-            result = yield self.async_worker.submit(self.session_pool.close_session, session_id)
+            yield self.async_worker.submit(self.session_pool.close_session, session_id)
         except KeyError:
-            self.response['error'] = {'code': 'XMPPSessionError', 'text': 'There is no session with id %s'%session_id}
+            self.response['error'] = \
+                {'code': 'XMPPSessionError', 'text': 'There is no session with id %s' % session_id}
             raise web.HTTPError(404)
 
         self.write(self.response)
 
     def put(self, session_id):
-        self.response['session'] = {'session_id':session_id}
+        self.response['session'] = {'session_id': session_id}
         session = self.get_session(session_id)
 
         json_body = self.get_body()
         if 'session' not in json_body:
-            self.response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+            self.response['error'] = \
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         session_body = json_body['session']
@@ -188,7 +209,8 @@ class SessionContactsHandler(XMPPClientHandler):
     def get(self, session_id):
         """
             Request parameters:
-                offset - returns contacts which has been changed since offset or has messages with event_id greater than offset
+                offset - returns contacts which has been changed since offset or has
+                messages with event_id greater than offset
         """
         session = self.get_session(session_id)
         offset = self.get_offset()
@@ -200,17 +222,20 @@ class SessionContactsHandler(XMPPClientHandler):
     def post(self, session_id):
         json_body = self.get_body()
         if 'contact' not in json_body:
-            self.response['error'] = {'code':'XMPPServiceParametersError','text':'Missing or wrong request body'}
+            self.response['error'] = \
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         contact = json_body['contact']
         session = self.get_session(session_id)
         jid = contact.get('jid')
-        contact_added = yield self.async_worker.submit(session.add_contact, jid, contact.get('name'))
+        contact_added = yield self.async_worker.submit(session.add_contact, jid,
+                                                       contact.get('name'))
 
         timeout = 5.0
         while timeout and contact_added is None:
-            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500),
+                                                 (yield gen.Callback("wait")))
             yield gen.Wait("wait")
             timeout -= 0.5
             contact_added = session.contact_by_jid(jid)
@@ -227,7 +252,8 @@ class SessionMUCsHandler(XMPPClientHandler):
     def get(self, session_id):
         """
             Request parameters:
-                offset - returns mucs which has been changed since offset or has messages with event_id greater than offset
+                offset - returns mucs which has been changed since offset or
+                has messages with event_id greater than offset
         """
         session = self.get_session(session_id)
         offset = self.get_offset()
@@ -239,7 +265,8 @@ class SessionMUCsHandler(XMPPClientHandler):
     def post(self, session_id):
         json_body = self.get_body()
         if 'muc' not in json_body:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
+            self.response['error'] = \
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         muc = json_body['muc']
@@ -251,7 +278,8 @@ class SessionMUCsHandler(XMPPClientHandler):
 
         timeout = 5.0
         while timeout and muc_added is None:
-            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500), (yield gen.Callback("wait")))
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=500),
+                                                 (yield gen.Callback("wait")))
             yield gen.Wait("wait")
             timeout -= 0.5
             muc_added = session.muc_by_node(muc_node)
@@ -312,9 +340,9 @@ class SessionNotificationHandler(XMPPClientHandler):
     @web.asynchronous
     @gen.coroutine
     def get(self, session_id):
-        self.response['session'] = {'session_id':session_id}
+        self.response['session'] = {'session_id': session_id}
         session = self.get_session(session_id)
-        session.wait_for_notification(callback = (yield gen.Callback("notification")))
+        session.wait_for_notification(callback=(yield gen.Callback("notification")))
         yield gen.Wait("notification")
         self.write(self.response)
         self.finish()
@@ -334,14 +362,16 @@ class ContactHandler(XMPPClientHandler):
     def put(self, session_id, contact_id):
         json_body = self.get_body()
         if 'contact' not in json_body:
-            self.response['error'] = {'code': 'XMPPServiceParametersError','text': 'Missing or wrong request body'}
+            self.response['error'] =\
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         self.check_contact_id(contact_id)
         session = self.get_session(session_id)
 
         try:
-            updated_contact = yield self.async_worker.submit(self.put_contact, session, contact_id, json_body)
+            updated_contact = yield self.async_worker.submit(self.put_contact, session,
+                                                             contact_id, json_body)
             self.response['contacts'] = [updated_contact]
         except KeyError:
             self.raise_contact_error(contact_id)
@@ -388,7 +418,8 @@ class MucHandler(XMPPClientHandler):
     def put(self, session_id, muc_id):
         json_body = self.get_body()
         if 'muc' not in json_body:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
+            self.response['error'] = \
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         self.check_muc_id(muc_id)
@@ -402,7 +433,8 @@ class MucHandler(XMPPClientHandler):
 
         #waiting for invited users join MUC
         if 'muc' in json_body and json_body['muc'].get('invite') is not None:
-            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=2000), (yield gen.Callback("wait")))
+            ioloop.IOLoop.instance().add_timeout(timedelta(milliseconds=2000),
+                                                 (yield gen.Callback("wait")))
             yield gen.Wait("wait")
             self.response['mucs'] = [session.muc(muc_id)]
 
@@ -445,7 +477,8 @@ class ContactMessagesHandler(XMPPClientHandler):
         offset = self.get_offset()
 
         try:
-            self.response['messages'] = session.messages(contact_ids=[contact_id], event_offset=offset)
+            self.response['messages'] = session.messages(contact_ids=[contact_id],
+                                                         event_offset=offset)
         except TypeError:
             self.raise_contact_error(contact_id)
 
@@ -457,14 +490,16 @@ class ContactMessagesHandler(XMPPClientHandler):
         try:
             message = json_body['messages']['text']
         except KeyError:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
+            self.response['error'] = \
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         self.check_contact_id(contact_id)
         session = self.get_session(session_id)
 
         try:
-            self.response['messages'] = yield self.async_worker.submit(session.send, contact_id, message)
+            self.response['messages'] = yield self.async_worker.submit(session.send,
+                                                                       contact_id, message)
         except XMPPSendError:
             self.raise_message_sending_error()
         except TypeError:
@@ -496,14 +531,16 @@ class MucMessagesHandler(XMPPClientHandler):
         try:
             message = json_body['messages']['text']
         except KeyError:
-            self.response['error'] = {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
+            self.response['error'] = \
+                {'code': 'XMPPServiceParametersError', 'text': 'Missing or wrong request body'}
             raise web.HTTPError(400)
 
         self.check_muc_id(muc_id)
         session = self.get_session(session_id)
 
         try:
-            self.response['messages'] = yield self.async_worker.submit(session.send, muc_id, message)
+            self.response['messages'] = yield self.async_worker.submit(session.send,
+                                                                       muc_id, message)
         except XMPPSendError:
             self.raise_message_sending_error()
         except TypeError:
@@ -517,12 +554,13 @@ class ServerStatusHandler(XMPPClientHandler):
         response = {}
         try:
             import psutil
+
             def sizeof_fmt(num):
-                for x in ['B','kB','MB','GB']:
+                for x in ['B', 'kB', 'MB', 'GB']:
                     if num < 1024.0:
-                        return {'value':num, 'units':x}
+                        return {'value': num, 'units': x}
                     num /= 1024.0
-                return {'value':num, 'units':'TB'}
+                return {'value': num, 'units': 'TB'}
             process = psutil.Process(os.getpid())
             response['memory'] = sizeof_fmt(process.get_memory_info()[0])
             response['threads'] = process.get_num_threads()
