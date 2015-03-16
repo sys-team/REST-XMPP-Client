@@ -210,7 +210,7 @@ class SessionHandler(XMPPClientHandler):
 
     @gen.coroutine
     def delete(self, session_id):
-        self.get_session(session_id)
+        self.get_session(session_id, accept_admin=True)
         try:
             yield self.async_worker.submit(self.session_pool.close_session, session_id)
         except KeyError:
