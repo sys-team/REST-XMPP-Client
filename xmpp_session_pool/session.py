@@ -2,6 +2,7 @@
 __author__ = 'v.kovtash@gmail.com'
 
 import logging
+import time
 from Queue import Queue
 
 
@@ -13,9 +14,14 @@ class XMPPSession(object):
         self.xmpp_client = xmpp_client
         self.xmpp_client.register_events_observer(self)
         self.notification_queue = Queue()
+        self.start_timestamp = time.time()
+        self.last_activity = time.time()
         if not self.xmpp_client.isConnected():
             self.xmpp_client.setup_connection()
         self.should_send_message_body = False
+
+    def touch(self):
+        self.last_activity = time.time()
 
     def clean(self, with_notification=True):
         if with_notification:

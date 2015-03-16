@@ -1,4 +1,7 @@
 
+# -*- coding: utf-8 -*-
+__author__ = 'v.kovtash@gmail.com'
+
 import hashlib
 import hmac
 

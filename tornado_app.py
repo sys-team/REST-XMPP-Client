@@ -94,7 +94,7 @@ class XMPPClientHandler(web.RequestHandler):
         return should_wait
 
     @property
-    def auth_token(self):
+    def request_auth_token(self):
         auth_header = self.get_header('Authorization')
         if auth_header is None:
             self.response['error'] = {'code': 'XMPPAuthError',
@@ -123,12 +123,10 @@ class XMPPClientHandler(web.RequestHandler):
                                       'text': 'There is no session with id %s' % session_id}
             raise web.HTTPError(404)
 
-        print (self.get_header('Authorization'))
-        print (self.auth_token)
-        print (session.token)
-
-        if (digest.compare_digest(self.auth_token, session.token) or
-                accept_admin and digest.compare_digest(self.admin_token_hash, self.auth_token)):
+        if digest.compare_digest(self.request_auth_token, session.token):
+            session.touch()
+            return session
+        elif accept_admin and digest.compare_digest(self.admin_token_hash, self.request_auth_token):
             return session
         else:
             self.response['error'] = {'code': 'XMPPAuthError', 'text': 'Wrong authorization data'}
@@ -205,6 +203,9 @@ class SessionHandler(XMPPClientHandler):
         session = self.get_session(session_id, accept_admin=True)
         self.response['session']['jid'] = session.jid
         self.response['session']['should_send_message_body'] = session.should_send_message_body
+        self.response['session']['start_timestamp'] = session.start_timestamp
+        self.response['session']['last_activity'] = session.last_activity
+        self.response['session']['push_token'] = session.im_client.push_token
 
         self.write(self.response)
 
