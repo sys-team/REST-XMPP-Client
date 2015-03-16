@@ -11,6 +11,17 @@ import uuid
 AUTH_HEADER_PREFIX = 'Bearer '
 
 
+def session_to_dict(session):
+    return {
+        'session_id': session.session_id,
+        'jid': session.jid,
+        'should_send_message_body': session.should_send_message_body,
+        'start_timestamp': session.start_timestamp,
+        'last_activity': session.last_activity,
+        'push_token': session.im_client.push_token
+    }
+
+
 class MainHandler(web.RequestHandler):
     @gen.coroutine
     def head(self):
@@ -65,6 +76,11 @@ class XMPPClientHandler(web.RequestHandler):
                                       'text': 'Missing muc_id parameter'}
             raise web.HTTPError(400)
 
+    def check_admin_access(self):
+        if not digest.compare_digest(self.admin_token_hash, self.auth_token):
+            self.response['error'] = {'code': 'XMPPAuthError', 'text': 'Wrong authorization data'}
+            raise web.HTTPError(401)
+
     def get_header(self, header_name):
         if header_name in self.request.headers:
             return self.request.headers[header_name]
@@ -82,19 +98,16 @@ class XMPPClientHandler(web.RequestHandler):
 
         return offset
 
-    def get_should_wait(self):
-        should_wait_param = self.get_argument('wait', None)
-        should_wait = False
-        if should_wait_param is not None:
-            try:
-                should_wait = bool(should_wait_param)
-            except ValueError:
-                self.raise_value_error('wait')
-
-        return should_wait
+    @property
+    def should_wait(self):
+        return self.get_argument('wait', None) is not None
 
     @property
-    def request_auth_token(self):
+    def should_expand(self):
+        return self.get_argument('expand', None) is not None
+
+    @property
+    def auth_token(self):
         auth_header = self.get_header('Authorization')
         if auth_header is None:
             self.response['error'] = {'code': 'XMPPAuthError',
@@ -111,6 +124,8 @@ class XMPPClientHandler(web.RequestHandler):
         return digest.digest(auth_header[prefix_len:])
 
     def get_session(self, session_id, accept_admin=False):
+        self.response['session'] = {'session_id': session_id}
+
         if session_id is None:
             self.response['error'] = {'code': 'XMPPServiceParametersError',
                                       'text': 'Missing session_id parameter'}
@@ -123,10 +138,10 @@ class XMPPClientHandler(web.RequestHandler):
                                       'text': 'There is no session with id %s' % session_id}
             raise web.HTTPError(404)
 
-        if digest.compare_digest(self.request_auth_token, session.token):
+        if digest.compare_digest(self.auth_token, session.token):
             session.touch()
             return session
-        elif accept_admin and digest.compare_digest(self.admin_token_hash, self.request_auth_token):
+        elif accept_admin and digest.compare_digest(self.admin_token_hash, self.auth_token):
             return session
         else:
             self.response['error'] = {'code': 'XMPPAuthError', 'text': 'Wrong authorization data'}
@@ -197,16 +212,23 @@ class StartSession(XMPPClientHandler):
         self.write(self.response)
 
 
+class SessionsHandler(XMPPClientHandler):
+    def get(self):
+        self.check_admin_access()
+        sessions = []
+        if self.should_expand:
+            sessions = map(session_to_dict, self.session_pool.session_pool.values())
+        else:
+            sessions = self.session_pool.session_pool.keys()
+
+        self.response['sessions'] = sessions
+        self.write(self.response)
+
+
 class SessionHandler(XMPPClientHandler):
     def get(self, session_id):
-        self.response['session'] = {'session_id': session_id}
         session = self.get_session(session_id, accept_admin=True)
-        self.response['session']['jid'] = session.jid
-        self.response['session']['should_send_message_body'] = session.should_send_message_body
-        self.response['session']['start_timestamp'] = session.start_timestamp
-        self.response['session']['last_activity'] = session.last_activity
-        self.response['session']['push_token'] = session.im_client.push_token
-
+        self.response['session'] = session_to_dict(session)
         self.write(self.response)
 
     @gen.coroutine
@@ -347,14 +369,13 @@ class SessionFeedHandler(XMPPClientHandler):
                 offset - returns objects which has been changed  or added since offset
         """
         offset = self.get_offset()
-        should_wait = self.get_should_wait()
         session = self.get_session(session_id)
 
         contacts = session.contacts(event_offset=offset)
         mucs = session.mucs(event_offset=offset)
         messages = session.messages(event_offset=offset)
 
-        if not len(contacts) + len(mucs) + len(messages) and should_wait:
+        if not len(contacts) + len(mucs) + len(messages) and self.should_wait:
             session.wait_for_notification(callback=(yield gen.Callback("notification")))
             yield gen.Wait("notification")
             contacts = session.contacts(event_offset=offset)

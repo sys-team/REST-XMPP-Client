@@ -62,7 +62,7 @@ class XMPPSessionPool(object):
         session.clean(with_notification=with_notification)
         del self.session_pool[session_id]
 
-        if  xmpp_dispatcher is not None and not xmpp_dispatcher.client.observers_count:
+        if xmpp_dispatcher is not None and not xmpp_dispatcher.client.observers_count:
             xmpp_dispatcher.stop()
             del self.xmpp_client_pool[session.xmpp_client.jid]
 
