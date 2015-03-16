@@ -18,7 +18,8 @@ class XMPPSessionPool(object):
         if self.push_sender is not None:
             self.push_sender.start()
 
-    def start_session(self, jid, password, server=None, push_token=None, im_client_id=None):
+    def start_session(self, jid, password, session_token,
+                      server=None, push_token=None, im_client_id=None):
         if jid not in self.xmpp_client_pool:
             xmpp_client = XMPPClient(jid=jid, password=password, server=server)
             xmpp_client.setup_connection()
@@ -35,17 +36,20 @@ class XMPPSessionPool(object):
             im_client_id = uuid.uuid4().hex
 
         if im_client_id not in self.im_client_pool:
-            self.im_client_pool[im_client_id] = IMClient(client_id=im_client_id, push_token=push_token, push_sender=self.push_sender)
+            self.im_client_pool[im_client_id] = IMClient(client_id=im_client_id,
+                                                         push_token=push_token,
+                                                         push_sender=self.push_sender)
 
         im_client = self.im_client_pool[im_client_id]
 
-        session = im_client.start_session(jid=jid, xmpp_client=xmpp_dispatcher.client)
+        session = im_client.start_session(jid=jid, session_token=session_token,
+                                          xmpp_client=xmpp_dispatcher.client)
         if session.session_id not in self.session_pool:
             self.session_pool[session.session_id] = session
 
         return session.session_id
 
-    def close_session(self,session_id,with_notification=False):
+    def close_session(self, session_id, with_notification=False):
         session = self.session_pool[session_id]
         im_client = session.im_client
 
@@ -62,7 +66,7 @@ class XMPPSessionPool(object):
             xmpp_dispatcher.stop()
             del self.xmpp_client_pool[session.xmpp_client.jid]
 
-    def session_for_id(self,session_id):
+    def session_for_id(self, session_id):
         return self.session_pool[session_id]
 
     def clean(self):
@@ -79,9 +83,11 @@ class IMClient(object):
         self.push_token = push_token
         self.push_sender = push_sender
 
-    def start_session(self, jid, xmpp_client):
+    def start_session(self, jid, session_token, xmpp_client):
         if jid not in self.sessions:
-            self.sessions[jid] = XMPPSession(session_id=uuid.uuid4().hex, xmpp_client=xmpp_client, im_client=self)
+            self.sessions[jid] = XMPPSession(session_id=uuid.uuid4().hex,
+                                             session_token=session_token,
+                                             xmpp_client=xmpp_client, im_client=self)
         return self.sessions[jid]
 
     def session_closed(self, session):

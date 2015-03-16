@@ -1,6 +1,5 @@
 __author__ = 'kovtash'
 
-import uuid
 import tornado.ioloop
 import tornado.web
 import concurrent
@@ -16,14 +15,8 @@ class TornadoApp(object):
         self._xmpp_session_pool = XMPPSessionPool(debug=debug, push_sender=push_sender)
         self._async_worker = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
-        if admin_token_hash is None:
-            admin_token_hash = "".join([uuid.uuid4().get_hex(), uuid.uuid4().get_hex()])
-        elif len(admin_token_hash) != 64:
-            raise ValueError('admin_token_hash argument must be a hexadecimal string\
- 64 characters length')
-
-        tornado_conf = dict(session_pool=self._xmpp_session_pool, async_worker=self._async_worker,
-                            admin_token_hash=admin_token_hash)
+        tornado_conf = dict(session_pool=self._xmpp_session_pool, admin_token_hash=admin_token_hash,
+                            async_worker=self._async_worker)
         self._app = tornado.web.Application([
             (r"/sessions/([^/]*)/notification", SessionNotificationHandler, tornado_conf),
             (r"/sessions/([^/]*)/feed", SessionFeedHandler, tornado_conf),

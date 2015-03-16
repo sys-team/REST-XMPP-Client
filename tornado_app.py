@@ -1,10 +1,14 @@
 __author__ = 'kovtash'
 
 from tornado import web, gen, ioloop
-from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError
+from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError, digest
 from datetime import timedelta
 import json
 import os
+import uuid
+
+
+AUTH_HEADER_PREFIX = 'Bearer '
 
 
 class MainHandler(web.RequestHandler):
@@ -14,10 +18,18 @@ class MainHandler(web.RequestHandler):
 
 
 class XMPPClientHandler(web.RequestHandler):
-    def initialize(self, session_pool, async_worker):
+    def initialize(self, session_pool, admin_token_hash, async_worker):
         self.session_pool = session_pool
         self.async_worker = async_worker
         self.response = {}
+
+        if admin_token_hash is None:
+            self.admin_token_hash = digest.digest(uuid.uuid4().hex)
+        elif len(admin_token_hash) != digest.hex_digest_size():
+            raise ValueError('admin_token_hash argument must be a hexadecimal string\
+ %s characters length' % digest.hex_digest_size())
+        else:
+            self.admin_token_hash = admin_token_hash
 
     def write_error(self, status_code, **kwargs):
         self.write(self.response)
@@ -81,18 +93,28 @@ class XMPPClientHandler(web.RequestHandler):
 
         return should_wait
 
-    def get_session(self, session_id):
-        if session_id is None:
-            self.response['error'] = {'code': 'XMPPServiceParametersError',
-                                      'text': 'Missing session_id parameter'}
-            raise web.HTTPError(400)
-
+    @property
+    def auth_token(self):
         auth_header = self.get_header('Authorization')
-
         if auth_header is None:
             self.response['error'] = {'code': 'XMPPAuthError',
                                       'text': 'No authorization information provided'}
             raise web.HTTPError(502)
+
+        prefix_len = len(AUTH_HEADER_PREFIX)
+        prefix = auth_header[0:prefix_len]
+        if prefix != AUTH_HEADER_PREFIX:
+            self.response['error'] = {'code': 'XMPPAuthError',
+                                      'text': 'Wrong header format'}
+            raise web.HTTPError(502)
+
+        return digest.digest(auth_header[prefix_len:])
+
+    def get_session(self, session_id, accept_admin=False):
+        if session_id is None:
+            self.response['error'] = {'code': 'XMPPServiceParametersError',
+                                      'text': 'Missing session_id parameter'}
+            raise web.HTTPError(400)
 
         try:
             session = self.session_pool.session_for_id(session_id)
@@ -101,11 +123,16 @@ class XMPPClientHandler(web.RequestHandler):
                                       'text': 'There is no session with id %s' % session_id}
             raise web.HTTPError(404)
 
-        if not auth_header[7:] == session.token:
+        print (self.get_header('Authorization'))
+        print (self.auth_token)
+        print (session.token)
+
+        if (digest.compare_digest(self.auth_token, session.token) or
+                accept_admin and digest.compare_digest(self.admin_token_hash, self.auth_token)):
+            return session
+        else:
             self.response['error'] = {'code': 'XMPPAuthError', 'text': 'Wrong authorization data'}
             raise web.HTTPError(401)
-
-        return session
 
     def get_body(self):
         if self.request.body is None:
@@ -131,6 +158,9 @@ class StartSession(XMPPClientHandler):
         push_token = self.get_argument('push_token', default=None)
         client_id = self.get_argument('client_id', default=None)
 
+        session_token = uuid.uuid4().hex
+        session_token_hash = digest.digest(session_token)
+
         if jid is None or password is None or server is None:
             self.response['error'] = {'code': 'XMPPServiceParametersError',
                                       'text': 'Missing required parameters'}
@@ -138,6 +168,7 @@ class StartSession(XMPPClientHandler):
 
         try:
             session_id = yield self.async_worker.submit(self.session_pool.start_session, jid=jid,
+                                                        session_token=session_token_hash,
                                                         password=password, server=server,
                                                         push_token=push_token,
                                                         im_client_id=client_id)
@@ -158,7 +189,7 @@ class StartSession(XMPPClientHandler):
 
         try:
             session = self.session_pool.session_for_id(session_id)
-            self.response['session']['token'] = session.token
+            self.response['session']['token'] = session_token
             self.response['session']['jid'] = session.jid
         except KeyError:
             self.response['error'] = \
@@ -171,7 +202,7 @@ class StartSession(XMPPClientHandler):
 class SessionHandler(XMPPClientHandler):
     def get(self, session_id):
         self.response['session'] = {'session_id': session_id}
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, accept_admin=True)
         self.response['session']['jid'] = session.jid
         self.response['session']['should_send_message_body'] = session.should_send_message_body
 

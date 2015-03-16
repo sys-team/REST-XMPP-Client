@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 __author__ = 'v.kovtash@gmail.com'
 
-import uuid
 import logging
 from Queue import Queue
 
 
 class XMPPSession(object):
-    def __init__(self, session_id, xmpp_client, im_client):
+    def __init__(self, session_id, session_token, xmpp_client, im_client):
         self.session_id = session_id
-        self.token = uuid.uuid4().hex
+        self.token = session_token
         self.im_client = im_client
         self.xmpp_client = xmpp_client
         self.xmpp_client.register_events_observer(self)
@@ -20,7 +19,8 @@ class XMPPSession(object):
 
     def clean(self, with_notification=True):
         if with_notification:
-            self.im_client.push_notification(message="Session closed. Login again, to start new session.")
+            self.im_client.push_notification(message="Session closed. Login again,\
+to start new session.")
         logging.debug(u'SessionEvent : Session %s start cleaning', self.xmpp_client.jid)
         self.im_client.session_closed(self)
         self.xmpp_client.unregister_events_observer(self)
@@ -98,10 +98,12 @@ class XMPPSession(object):
         self.xmpp_client.set_contact_read_offset(contact_id=contact_id, read_offset=read_offset)
 
     def set_contact_history_offset(self, contact_id, history_offset):
-        self.xmpp_client.set_contact_history_offset(contact_id=contact_id, history_offset=history_offset)
+        self.xmpp_client.set_contact_history_offset(contact_id=contact_id,
+                                                    history_offset=history_offset)
 
     def set_contact_authorization(self, contact_id, authorization):
-        self.xmpp_client.set_contact_authorization(contact_id=contact_id, authorization=authorization)
+        self.xmpp_client.set_contact_authorization(contact_id=contact_id,
+                                                   authorization=authorization)
 
     def contact_by_jid(self, jid):
         return self.xmpp_client.contact_by_jid(jid=jid)
