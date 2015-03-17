@@ -34,9 +34,9 @@ def arguments():
     pyapns.add_argument('--pyapns-dev-mode', action='store_true',
                         help='Push notifications will be sentto sandbox apn server.')
     admin_token = parser.add_argument_group('Admin token')
-    admin_token.add_argument('--admin-token-hash', action='store', nargs='?',
+    admin_token.add_argument('--admin-token-enc', action='store', nargs='?',
                              help='Admin token encoden with SHA1.')
-    admin_token.add_argument('--admin-token', action='store', nargs='?',
+    admin_token.add_argument('--admin-token-plain', action='store', nargs='?',
                              help='Plain text admin token.')
 
     return parser.parse_args()
