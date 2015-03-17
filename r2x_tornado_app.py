@@ -7,7 +7,7 @@ from xmpp_session_pool import XMPPSessionPool
 from tornado_app import MainHandler, StartSession, SessionHandler, SessionContactsHandler,\
     SessionMessagesHandler, SessionFeedHandler, SessionNotificationHandler, ContactHandler,\
     ContactMessagesHandler, ServerStatusHandler, SessionMUCsHandler, MucHandler,\
-    MucMessagesHandler, SessionsHandler
+    MucMessagesHandler, SessionListHandler, ConnectionHandler, ConnectionListHandler
 
 
 class TornadoApp(object):
@@ -29,8 +29,10 @@ class TornadoApp(object):
             (r"/sessions/([^/]*)/contacts/([^/]*)/messages", ContactMessagesHandler, tornado_conf),
             (r"/sessions/([^/]*)/messages", SessionMessagesHandler, tornado_conf),
             (r"/sessions/([^/]*)", SessionHandler, tornado_conf),
-            (r"/sessions", SessionsHandler, tornado_conf),
+            (r"/sessions", SessionListHandler, tornado_conf),
             (r"/start-session", StartSession, tornado_conf),
+            (r"/connections", ConnectionListHandler, tornado_conf),
+            (r"/connections/([^/]*)", ConnectionHandler, tornado_conf),
             (r"/server-status", ServerStatusHandler, tornado_conf),
             (r"/", MainHandler)
         ])

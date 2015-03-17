@@ -3,7 +3,7 @@ __author__ = 'kovtash'
 from tornado import web, gen, ioloop
 from xmpp_session_pool import XMPPAuthError, XMPPConnectionError, XMPPSendError, digest
 from datetime import timedelta
-import json
+import ujson as json
 import os
 import uuid
 
@@ -212,7 +212,67 @@ class StartSession(XMPPClientHandler):
         self.write(self.response)
 
 
-class SessionsHandler(XMPPClientHandler):
+class ConnectionListHandler(XMPPClientHandler):
+    @gen.coroutine
+    def get(self):
+        self.check_admin_access()
+        connections = []
+        if self.should_expand:
+            def expanded_connection():
+                sessions_dict = {}
+                for session in self.session_pool.session_pool.values():
+                    if session.jid not in sessions_dict:
+                        connection = {'jid': session.jid, 'sessions': []}
+                        sessions_dict[session.jid] = connection
+                    sessions_dict[session.jid]['sessions'].append(session_to_dict(session))
+                return sessions_dict.values()
+            connections = yield self.async_worker.submit(expanded_connection)
+        else:
+            connections = self.session_pool.xmpp_client_pool.keys()
+
+        self.response['connections'] = connections
+        self.write(self.response)
+
+
+class ConnectionHandler(XMPPClientHandler):
+    @gen.coroutine
+    def get(self, jid):
+        self.check_admin_access()
+        self.response['jid'] = jid
+
+        if jid not in self.session_pool.xmpp_client_pool:
+            self.response['error'] = \
+                {'code': 'XMPPConnectionError', 'text': 'There is no connection with jid %s' % jid}
+            raise web.HTTPError(404)
+
+        def sessions():
+            sessions = filter(lambda s: s.jid == jid, self.session_pool.session_pool.values())
+            return map(session_to_dict, sessions)
+
+        self.response['sessions'] = yield self.async_worker.submit(sessions)
+        self.write(self.response)
+
+    @gen.coroutine
+    def delete(self, jid):
+        self.check_admin_access()
+        self.response['jid'] = jid
+
+        if jid not in self.session_pool.xmpp_client_pool:
+            self.response['error'] = \
+                {'code': 'XMPPConnectionError', 'text': 'There is no connection with jid %s' % jid}
+            raise web.HTTPError(404)
+
+        def close_sessions():
+            sessions = filter(lambda s: s.jid == jid, self.session_pool.session_pool.values())
+            session_ids = map(lambda s: s.session_id, sessions)
+            map(self.session_pool.close_session, session_ids)
+            return session_ids
+
+        self.response['sessions'] = yield self.async_worker.submit(close_sessions)
+        self.write(self.response)
+
+
+class SessionListHandler(XMPPClientHandler):
     def get(self):
         self.check_admin_access()
         sessions = []
