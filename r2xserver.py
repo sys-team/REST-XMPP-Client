@@ -73,8 +73,11 @@ def main():
 
     admin_token_hash = None
 
-    if args.admin_token_hash is not None:
-        admin_token_hash = args.admin_token_hash
+    if args.admin_token_enc is not None:
+        if len(args.admin_token_enc) != digest.hex_digest_size():
+            sys.exit('Encrypted token must be a hexadecimal string %s characters length' %
+                     digest.hex_digest_size())
+        admin_token_hash = args.admin_token_enc
     elif args.admin_token is not None:
         admin_token_hash = digest.digest(args.admin_token)
     else:
