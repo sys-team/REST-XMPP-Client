@@ -1,12 +1,12 @@
 __author__ = 'v.kovtash@gmail.com'
 
 from r2x_tornado_app import TornadoApp
-from xmpp_session_pool import PyAPNSNotification
+from xmpp_session_pool import PyAPNSNotification, digest
+import uuid
 import logging
 import logging.handlers
 import signal
 import sys
-import hashlib
 
 
 def arguments():
@@ -34,9 +34,9 @@ def arguments():
     pyapns.add_argument('--pyapns-dev-mode', action='store_true',
                         help='Push notifications will be sentto sandbox apn server.')
     admin_token = parser.add_argument_group('Admin token')
-    admin_token.add_argument('--admin-token-hash', action='store', nargs='?',
-                             help='Admin token encoden with SHA256.')
-    admin_token.add_argument('--admin-token', action='store', nargs='?',
+    admin_token.add_argument('--admin-token-enc', action='store', nargs='?',
+                             help='Admin token encoden with SHA1.')
+    admin_token.add_argument('--admin-token-plain', action='store', nargs='?',
                              help='Plain text admin token.')
 
     return parser.parse_args()
@@ -73,10 +73,15 @@ def main():
 
     admin_token_hash = None
 
-    if args.admin_token_hash is not None:
-        admin_token_hash = args.admin_token_hash
+    if args.admin_token_enc is not None:
+        if len(args.admin_token_enc) != digest.hex_digest_size():
+            sys.exit('Encrypted token must be a hexadecimal string %s characters length' %
+                     digest.hex_digest_size())
+        admin_token_hash = args.admin_token_enc
     elif args.admin_token is not None:
-        admin_token_hash = hashlib.sha256(args.admin_token).hexdigest()
+        admin_token_hash = digest.digest(args.admin_token)
+    else:
+        admin_token_hash = digest.digest(uuid.uuid4().hex)
 
     app = TornadoApp(push_sender=push_sender, admin_token_hash=admin_token_hash)
 
