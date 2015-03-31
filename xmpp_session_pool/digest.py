@@ -23,4 +23,20 @@ def hex_digest_size():
 
 
 def compare_digest(token1, token2):
-    return hmac.compare_digest(token1, token2)
+    try:
+        return hmac.compare_digest(token1, token2)
+    except AttributeError:
+        return compare_digest_fallback(token1, token2)
+
+
+def compare_digest_fallback(x, y):
+    if not (isinstance(x, str) and isinstance(y, str)):
+        raise TypeError("both inputs should be instances of str")
+
+    if len(x) != len(y):
+        return False
+    
+    result = 0
+    for a, b in zip(x, y):
+        result |= (a != b)
+    return result == 0
