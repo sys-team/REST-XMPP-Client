@@ -4,6 +4,7 @@ except ImportError:
     import json
 
 import boto.sns
+from boto.exception import BotoServerError
 from repoze.lru import lru_cache
 
 
@@ -76,8 +77,10 @@ class APNApp():
     def send_aps_message(self, token, message):
         target_arn = self.get_arn_by_token(token)
         sns_message = {self.app_arn.platform: json.dumps(message)}
-        response = self.connection.publish(
-            message_structure="json", target_arn=target_arn, message=json.dumps(sns_message))
+
+        response = self.connection.publish(message_structure="json", 
+                                           target_arn=target_arn, 
+                                           message=json.dumps(sns_message))
 
         if "PublishResponse" not in response:
             raise SNSResponseError("Wrong response format")
@@ -91,6 +94,12 @@ class APNApp():
 
         if "MessageId" not in result:
             raise SNSResponseError("Message was not sent")
+
+    def enable_endpoint(self, token):
+        target_arn = self.get_arn_by_token(token)
+        attributes = {"Enabled": True}
+        self.connection.set_endpoint_attributes(endpoint_arn=target_arn, 
+                                                attributes=attributes)
 
     @lru_cache(maxsize=1024)
     def get_arn_by_token(self, token):
