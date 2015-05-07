@@ -124,8 +124,6 @@ class XMPPClientHandler(web.RequestHandler):
         return digest.digest(auth_header[prefix_len:])
 
     def get_session(self, session_id, accept_admin=False):
-        self.response['session'] = {'session_id': session_id}
-
         if session_id is None:
             self.response['error'] = {'code': 'XMPPServiceParametersError',
                                       'text': 'Missing session_id parameter'}
